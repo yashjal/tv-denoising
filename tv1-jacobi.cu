@@ -80,11 +80,11 @@ __global__ void GPU_jacobi(float* u0, float* u1, float *f, long Xsize, long Ysiz
   
   __syncthreads();
   
-  u0[idx*Ysize+idy] = u1[idx*Ysize+ysize];
+  u0[idx*Ysize+idy] = u1[idx*Ysize+idy];
 }
 
 int main() {
-  long repeat = 500;
+  //long repeat = 500;
   long T = 100; // total variation 
   long N = 100; // jacobi
   float eps = 1e-2;
@@ -127,9 +127,9 @@ int main() {
   cudaStreamCreate(&streams[2]);
 
   // Dry run
-  /*
   dim3 blockDim(BLOCK_DIM, BLOCK_DIM);
-  dim3 gridDim(Xsize/(BLOCK_DIM-FWIDTH)+1, Ysize/(BLOCK_DIM-FWIDTH)+1);
+  dim3 gridDim(Xsize/BLOCK_DIM+1, Ysize/BLOCK_DIM+1);
+  /*
   GPU_convolution<<<gridDim,blockDim, 0, streams[0]>>>(I1gpu+0*Xsize*Ysize, I0gpu+0*Xsize*Ysize, Xsize, Ysize);
   GPU_convolution<<<gridDim,blockDim, 0, streams[1]>>>(I1gpu+1*Xsize*Ysize, I0gpu+1*Xsize*Ysize, Xsize, Ysize);
   GPU_convolution<<<gridDim,blockDim, 0, streams[2]>>>(I1gpu+2*Xsize*Ysize, I0gpu+2*Xsize*Ysize, Xsize, Ysize);
@@ -144,13 +144,13 @@ int main() {
     norm_upd<<<gridDim,blockDim, 2, streams[2]>>>(dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, u0gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, eps, del, h, Xsize, Ysize);
 
     for (long k = 0; k < N; k++) {
-      GPU_jacobi<<<gridDim,blockDim, 0, streams[0]>>>(u0gpu+0*Xsize*Ysize, u1gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, Xsize, Ysize, h, dugpu+0*Xsize*Ysize, hf+0*Xsize*Ysize, lambda);
-      GPU_jacobi<<<gridDim,blockDim, 1, streams[1]>>>(u0gpu+1*Xsize*Ysize, u1gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hf+1*Xsize*Ysize, lambda);
-      GPU_jacobi<<<gridDim,blockDim, 2, streams[2]>>>(u0gpu+2*Xsize*Ysize, u1gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, Xsize, Ysize, h, dugpu+2*Xsize*Ysize, hf+2*Xsize*Ysize, lambda);
+      GPU_jacobi<<<gridDim,blockDim, 0, streams[0]>>>(u0gpu+0*Xsize*Ysize, u1gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, Xsize, Ysize, h, dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, lambda);
+      GPU_jacobi<<<gridDim,blockDim, 1, streams[1]>>>(u0gpu+1*Xsize*Ysize, u1gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, lambda);
+      GPU_jacobi<<<gridDim,blockDim, 2, streams[2]>>>(u0gpu+2*Xsize*Ysize, u1gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, Xsize, Ysize, h, dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, lambda);
     }
   }
   cudaDeviceSynchronize();
-  tt = t.toc();
+  double tt = t.toc();
   printf("GPU time = %fs\n", tt);
 
   // Print error
@@ -163,17 +163,21 @@ int main() {
 
   // Write output
   // write_image("CPU.ppm", I1_ref);
-  write_image("GPU.ppm", I1);
+  cudaMemcpy(u0.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  write_image("GPU.ppm", u0);
 
   // Free memory
   cudaStreamDestroy(streams[0]);
   cudaStreamDestroy(streams[1]);
   cudaStreamDestroy(streams[2]);
-  cudaFree(I0gpu);
-  cudaFree(I1gpu);
-  free_image(&I0);
-  free_image(&I1);
-  free_image(&I1_ref);
+  cudaFree(u0gpu);
+  cudaFree(u1gpu);
+  cudaFree(fgpu);
+  cudaFree(dugpu);
+  cudaFree(hfgpu);
+  free_image(&u0);
+  free_image(&f);
+  //free_image(&I1_ref);
   return 0;
 }
 
