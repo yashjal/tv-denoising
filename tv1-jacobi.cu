@@ -85,11 +85,11 @@ __global__ void GPU_jacobi(float* u0, float* u1, float *f, long Xsize, long Ysiz
 
 int main() {
   //long repeat = 500;
-  long T = 100; // total variation 
+  long T = 1; // total variation 
   long N = 100; // jacobi
-  float eps = 1e-2;
-  float del = 1e-2;
-  float lambda = 1; 
+  float eps = 1e-4;
+  float del = 1e-4;
+  float lambda = 0.5; 
 
   const char fname[] = "bike.ppm";
 
