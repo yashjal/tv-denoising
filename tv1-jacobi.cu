@@ -65,7 +65,7 @@ double norm(float *err, long Xsize, long Ysize) {
   return sqrt(sum);
 }
 
-__global__ void norm_upd(float* du, float* hf, float* u, float* f, float eps, float del, float h, long Xsize, long Ysize) {
+__global__ void norm_upd(float* du, float* hf, float* u, float* f, float* err, float eps, float del, float h, long Xsize, long Ysize) {
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
 
@@ -75,8 +75,11 @@ __global__ void norm_upd(float* du, float* hf, float* u, float* f, float eps, fl
     du[idx*Ysize+idy] = sqrt(ux*ux + uy*uy + eps);
     float uf = u[idx*Ysize+idy]-f[idx*Ysize+idy];
     hf[idx*Ysize+idy] = sqrt(uf*uf + del);
-  } 
+  }
+  
+  __syncthreads(); 
  
+  err[idx*Ysize+idy] = hf[idx*Ysize+idy]; //+ hf[idx*Ysize+idy];
 }
 
 __global__ void GPU_jacobi(float* u0, float* u1, float *f, float* err, long Xsize, long Ysize, float h, float* du, float* hf, float lambda) {
@@ -97,8 +100,8 @@ __global__ void GPU_jacobi(float* u0, float* u1, float *f, float* err, long Xsiz
 
 int main() {
   //long repeat = 500;
-  long T = 5; // total variation 
-  long N = 10000; // jacobi
+  long T = 50; // total variation 
+  long N = 1000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 0.5; 
@@ -153,10 +156,14 @@ int main() {
   cudaDeviceSynchronize();
   t.tic();
   for (long n = 0; n < T; n++) {
-    norm_upd<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-    norm_upd<<<gridDim,blockDim, 1, streams[1]>>>(dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, u0gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-    norm_upd<<<gridDim,blockDim, 2, streams[2]>>>(dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, u0gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-
+    norm_upd<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
+    norm_upd<<<gridDim,blockDim, 1, streams[1]>>>(dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, u0gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, eps, del, h, Xsize, Ysize);
+    norm_upd<<<gridDim,blockDim, 2, streams[2]>>>(dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, u0gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, eps, del, h, Xsize, Ysize);
+    
+    cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+    float norm_err = norm(err,Xsize,Ysize);
+    printf("TV iters: %d, err: %f\n", n, norm_err); 
+ 
     for (long k = 0; k < N; k++) {
       GPU_jacobi<<<gridDim,blockDim, 0, streams[0]>>>(u0gpu+0*Xsize*Ysize, u1gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, Xsize, Ysize, h, dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, lambda);
       GPU_jacobi<<<gridDim,blockDim, 1, streams[1]>>>(u0gpu+1*Xsize*Ysize, u1gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, lambda);
