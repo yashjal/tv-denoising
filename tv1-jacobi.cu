@@ -101,7 +101,7 @@ int main() {
   long N = 10000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
-  float lambda = 0.5; 
+  float lambda = 50; 
 
   const char fname[] = "bike.ppm";
 
