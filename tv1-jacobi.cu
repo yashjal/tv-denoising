@@ -98,10 +98,10 @@ __global__ void GPU_jacobi(float* u0, float* u1, float *f, float* err, long Xsiz
 int main() {
   //long repeat = 500;
   long T = 10; // total variation 
-  long N = 10000; // jacobi
+  long N = 1000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
-  float lambda = 50; 
+  float lambda = 10; 
 
   const char fname[] = "bike.ppm";
 
