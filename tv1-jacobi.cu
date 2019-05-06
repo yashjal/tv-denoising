@@ -199,13 +199,13 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 
 int main() {
   //long repeat = 500;
-  long T = 1; // total variation 
+  long T = 10; // total variation 
   long N = 1000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 1; 
   float mu = 0;
-  float sigma = 6;
+  float sigma = 10;
 
   const char fname[] = "bike.ppm";
 
