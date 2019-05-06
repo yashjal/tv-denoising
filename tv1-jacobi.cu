@@ -199,13 +199,13 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 
 int main() {
   //long repeat = 500;
-  long T = 2; // total variation 
+  long T = 5; // total variation 
   long N = 1000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 5; 
   float mu = 0;
-  float sigma = 50;
+  float sigma = 5;
 
   const char fname[] = "bike.ppm";
 
@@ -230,7 +230,15 @@ int main() {
     }
    }
   }
- write_image("bike_noise.ppm",unoise);
+  //char sigma_buf[10];
+  //char T_buf[10];
+  //char lam_buf[10];
+  //gcvt(sigma,2,sigma_buf);
+  //gcvt(lambda,2,lam_buf);
+  //gcvt((float)T,3,T_buf);
+
+  //const char* name1 = "noise_"+sigma_buf+".ppm";
+  write_image("bike_noise_5_5.ppm",unoise);
   // denoise on CPU
   Timer t;
   //t.tic();
@@ -309,8 +317,9 @@ int main() {
   // Write output
   // write_image("CPU.ppm", I1_ref);
   cudaMemcpy(u0.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
- // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("GPU_nsmem.ppm", u0);
+  
+  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  write_image("GPU_nsmem_5_5.ppm", u0);
 
   cudaDeviceSynchronize();
   t.tic();
@@ -341,9 +350,7 @@ int main() {
   printf("GPU time = %fs\n", tt);
   cudaMemcpy(u0.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("GPU_smem.ppm", u0);
-
-  
+   write_image("GPU_smem_5_5.ppm", u0);
 
 
   // Free memory
