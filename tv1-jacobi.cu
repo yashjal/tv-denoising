@@ -142,10 +142,10 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
     su0[threadIdx.x+1][0] = u0[idx*Ysize + idy - 1];
   }
   if(blockIdx.x < Xsize/BLOCK_DIM && threadIdx.x == BLOCK_DIM -1){
-    su0[BLOCK_DIM + 1][threadIdx.y+1] = u0[(blockIdx.x+1)*BLOCK_DIM + idy];
+    su0[BLOCK_DIM + 1][threadIdx.y+1] = u0[(idx+1)*Ysize+idy];//u0[(blockIdx.x+1)*BLOCK_DIM + idy];
   }
   if(blockIdx.y < Ysize/BLOCK_DIM && threadIdx.y == BLOCK_DIM -1){
-    su0[threadIdx.x+1][BLOCK_DIM+1] = u0[idx*Ysize + (blockIdx.y + 1)*BLOCK_DIM];
+    su0[threadIdx.x+1][BLOCK_DIM+1] = u0[idx*Ysize+(idy+1)];//u0[idx*Ysize + (blockIdx.y + 1)*BLOCK_DIM];
   } 
   su0[threadIdx.x+1][threadIdx.y+1] = u0[idx*Ysize + idy];
   __syncthreads();
