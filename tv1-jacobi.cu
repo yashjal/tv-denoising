@@ -200,7 +200,7 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 int main() {
   //long repeat = 500;
   long T = 2; // total variation 
-  long N = 1000; // jacobi
+  long N = 10; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 5; 
@@ -295,7 +295,7 @@ int main() {
       GPU_jacobi<<<gridDim,blockDim, 1, streams[1]>>>(u0gpu+1*Xsize*Ysize, u1gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, lambda);
       GPU_jacobi<<<gridDim,blockDim, 2, streams[2]>>>(u0gpu+2*Xsize*Ysize, u1gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, Xsize, Ysize, h, dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, lambda);
       
-      if (k%100 == 0) {
+      if (k%2 == 0) {
         cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
         float norm_err = norm(err,Xsize,Ysize);
         printf("Jacobi iters: %d, err: %f\n", k, norm_err);
