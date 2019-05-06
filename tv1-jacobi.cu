@@ -203,7 +203,7 @@ int main() {
   long N = 1000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
-  float lambda = 1; 
+  float lambda = 5; 
   float mu = 0;
   float sigma = 10;
 
