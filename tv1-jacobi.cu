@@ -97,7 +97,7 @@ __global__ void GPU_jacobi(float* u0, float* u1, float *f, float* err, long Xsiz
 
 int main() {
   //long repeat = 500;
-  long T = 2; // total variation 
+  long T = 10; // total variation 
   long N = 10000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
