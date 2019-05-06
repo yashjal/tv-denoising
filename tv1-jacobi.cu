@@ -205,7 +205,7 @@ int main() {
   float del = 1e-4;
   float lambda = 1; 
   float mu = 0;
-  float sigma = 3;
+  float sigma = 6;
 
   const char fname[] = "bike.ppm";
 
@@ -222,7 +222,7 @@ int main() {
   unoise.Ysize = Ysize;
   float h = 1.0/Xsize;
   unoise.A = (float*) malloc(3*Xsize*Ysize*sizeof(float));  
-
+  
   for(int c = 0; c < 3; c++){
     for(int i = 0; i < Xsize; i++){
       for(int j =0; j < Ysize; j++) {
