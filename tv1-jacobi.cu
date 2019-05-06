@@ -56,6 +56,15 @@ void free_image(RGBImage* I) {
 
 #define BLOCK_DIM 32
 
+double norm(float *err, long Xsize, long Ysize) {
+  float sum = 0;
+  //#pragma omp parallel for reduction (+:sum)
+  for (long i = 0; i < Xsize*Ysize; i+=1) {
+     sum += err[i]*err[i];
+  }
+  return sqrt(sum);
+}
+
 __global__ void norm_upd(float* du, float* hf, float* u, float* f, float eps, float del, float h, long Xsize, long Ysize) {
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
@@ -70,7 +79,7 @@ __global__ void norm_upd(float* du, float* hf, float* u, float* f, float eps, fl
  
 }
 
-__global__ void GPU_jacobi(float* u0, float* u1, float *f, long Xsize, long Ysize, float h, float* du, float* hf, float lambda) {
+__global__ void GPU_jacobi(float* u0, float* u1, float *f, float* err, long Xsize, long Ysize, float h, float* du, float* hf, float lambda) {
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
   
@@ -81,12 +90,15 @@ __global__ void GPU_jacobi(float* u0, float* u1, float *f, long Xsize, long Ysiz
   __syncthreads();
   
   u0[idx*Ysize+idy] = u1[idx*Ysize+idy];
+  if (idx > 0 && idx < Xsize-1 && idy > 0 && idy < Ysize-1) {
+    err[idx*Ysize+idy] = (-u0[(idx-1)*Ysize+idy] - u0[idx*Ysize+(idy-1)] + 4*u0[idx*Ysize+idy] - u0[(idx+1)*Ysize+idy] - u0[idx*Ysize+(idy+1)])/(h*h)/du[idx*Ysize+idy] + lambda*(u0[idx*Ysize+idy]-f[idx*Ysize+idy])/hf[idx*Ysize+idy];
+  }
 }
 
 int main() {
   //long repeat = 500;
   long T = 1; // total variation 
-  long N = 100; // jacobi
+  long N = 1000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 0.5; 
@@ -110,12 +122,14 @@ int main() {
   //printf("CPU flops = %fGFlop/s\n", repeat * 2*(Xsize-FWIDTH)*(Ysize-FWIDTH)*FWIDTH*FWIDTH/tt*1e-9);
 
   // Allocate GPU memory
-  float *u0gpu, *fgpu, *u1gpu, *dugpu, *hfgpu;
+  float *u0gpu, *fgpu, *u1gpu, *dugpu, *hfgpu, *errgpu, *err;
   cudaMalloc(&u0gpu, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&fgpu, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&u1gpu, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&dugpu, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&hfgpu, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&errgpu, 3*Xsize*Ysize*sizeof(float));
+  err = (float*)malloc(3*Xsize*Ysize*sizeof(float));
  
   cudaMemcpy(u0gpu, u0.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(fgpu, f.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
@@ -144,9 +158,16 @@ int main() {
     norm_upd<<<gridDim,blockDim, 2, streams[2]>>>(dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, u0gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, eps, del, h, Xsize, Ysize);
 
     for (long k = 0; k < N; k++) {
-      GPU_jacobi<<<gridDim,blockDim, 0, streams[0]>>>(u0gpu+0*Xsize*Ysize, u1gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, Xsize, Ysize, h, dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, lambda);
-      GPU_jacobi<<<gridDim,blockDim, 1, streams[1]>>>(u0gpu+1*Xsize*Ysize, u1gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, lambda);
-      GPU_jacobi<<<gridDim,blockDim, 2, streams[2]>>>(u0gpu+2*Xsize*Ysize, u1gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, Xsize, Ysize, h, dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, lambda);
+      GPU_jacobi<<<gridDim,blockDim, 0, streams[0]>>>(u0gpu+0*Xsize*Ysize, u1gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, Xsize, Ysize, h, dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, lambda);
+      GPU_jacobi<<<gridDim,blockDim, 1, streams[1]>>>(u0gpu+1*Xsize*Ysize, u1gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, lambda);
+      GPU_jacobi<<<gridDim,blockDim, 2, streams[2]>>>(u0gpu+2*Xsize*Ysize, u1gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, Xsize, Ysize, h, dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, lambda);
+      /*
+      if (k%10 == 0) {
+        cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+        float norm_err = norm(err,Xsize,Ysize);
+        printf("iters: %d, err: %f\n", k, norm_err);
+      }
+      */
     }
   }
   cudaDeviceSynchronize();
@@ -175,8 +196,10 @@ int main() {
   cudaFree(fgpu);
   cudaFree(dugpu);
   cudaFree(hfgpu);
+  cudaFree(errgpu);
   free_image(&u0);
   free_image(&f);
+  free(err);
   //free_image(&I1_ref);
   return 0;
 }
