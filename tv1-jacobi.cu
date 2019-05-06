@@ -199,15 +199,15 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 
 int main() {
   //long repeat = 500;
-  long T = 5; // total variation 
+  long T = 2; // total variation 
   long N = 1000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 5; 
   float mu = 0;
-  float sigma = 5;
+  float sigma = 50;
 
-  const char fname[] = "bike.ppm";
+  const char fname[] = "car.ppm";
 
   // Load image from file
   RGBImage u0, f, unoise; //I1_ref;
@@ -226,8 +226,9 @@ int main() {
   for(int c = 0; c < 3; c++){
     for(int i = 0; i < Xsize; i++){
       for(int j =0; j < Ysize; j++) {
+       // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j]);
         unoise.A[c*Xsize*Ysize + i*Ysize + j] = u0.A[c*Xsize*Ysize + i*Ysize + j] + randn(mu,sigma);
-    }
+     }
    }
   }
   //char sigma_buf[10];
@@ -238,7 +239,7 @@ int main() {
   //gcvt((float)T,3,T_buf);
 
   //const char* name1 = "noise_"+sigma_buf+".ppm";
-  write_image("bike_noise_5_5.ppm",unoise);
+  write_image("car_noise_2_50.ppm",unoise);
   // denoise on CPU
   Timer t;
   //t.tic();
@@ -319,7 +320,7 @@ int main() {
   cudaMemcpy(u0.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
   
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("GPU_nsmem_5_5.ppm", u0);
+  write_image("car_nsmem_2_50.ppm", u0);
 
   cudaDeviceSynchronize();
   t.tic();
@@ -350,7 +351,7 @@ int main() {
   printf("GPU time = %fs\n", tt);
   cudaMemcpy(u0.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-   write_image("GPU_smem_5_5.ppm", u0);
+   write_image("car_smem_2_50.ppm", u0);
 
 
   // Free memory
