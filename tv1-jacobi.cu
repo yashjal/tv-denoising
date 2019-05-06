@@ -94,6 +94,7 @@ __global__ void GPU_jacobi(float* u0, float* u1, float *f, float* err, long Xsiz
   if (idx > 0 && idx < Xsize-1 && idy > 0 && idy < Ysize-1) {
     u0[idx*Ysize+idy] = u1[idx*Ysize+idy];
   }
+  __syncthreads();
   if (idx > 0 && idx < Xsize-1 && idy > 0 && idy < Ysize-1) {
     err[idx*Ysize+idy] = (-u0[(idx-1)*Ysize+idy] - u0[idx*Ysize+(idy-1)] + 4*u0[idx*Ysize+idy] - u0[(idx+1)*Ysize+idy] - u0[idx*Ysize+(idy+1)])/(h*h)/du[idx*Ysize+idy] + lambda*(u0[idx*Ysize+idy]-f[idx*Ysize+idy])/hf[idx*Ysize+idy];
   }
@@ -105,11 +106,11 @@ __global__ void norm_upd_smem(float* du, float* hf, float* u, float* f, float* e
   __shared__ float su[BLOCK_DIM+1][BLOCK_DIM+1];
   //__shared__ float sf[BLOCK_DIM+1][BLOCK_DIM+1];
    
-  if (blockIdx.x > 0){
-    su[0][threadIdx.y+1] = u[((blockIdx.x - 1) *BLOCK_DIM + BLOCK_DIM - 1)*Ysize + idy];
+  if (blockIdx.x > 0 && threadIdx.x == 0){
+    su[0][threadIdx.y+1] = u[(idx-1)*Ysize+idy]; //u[((blockIdx.x - 1) *BLOCK_DIM + BLOCK_DIM - 1)*Ysize + idy];
   }
-  if (blockIdx.y > 0){
-    su[threadIdx.x + 1][0] = u[idx*Ysize + (blockIdx.y-1)*BLOCK_DIM + BLOCK_DIM - 1 ];
+  if (blockIdx.y > 0 && threadIdx.y == 0){
+    su[threadIdx.x + 1][0] = u[idx*Ysize+(idy-1)];//u[idx*Ysize + (blockIdx.y-1)*BLOCK_DIM + BLOCK_DIM - 1 ];
   }
   su[threadIdx.x+1][threadIdx.y+1] = u[idx*Ysize+idy];
   //sf[threadIdx.x+1][threadIdx.y+1] = f[idx*Ysize+idy];
@@ -134,16 +135,16 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
   __shared__ float su0[BLOCK_DIM+2][BLOCK_DIM+2];
   __shared__ float su1[BLOCK_DIM+2][BLOCK_DIM+2];
 
-  if(blockIdx.x > 0){
-    su0[0][threadIdx.y+1] = u0[((blockIdx.x - 1) *BLOCK_DIM + BLOCK_DIM - 1)*Ysize + idy];
+  if(blockIdx.x > 0 && threadIdx.x == 0 ){
+    su0[0][threadIdx.y+1] = u0[(idx -1)*Ysize + idy];
   }
-  if(blockIdx.y > 0){
-    su0[threadIdx.x+1][0] = u0[idx*Ysize + (blockIdx.y-1)*BLOCK_DIM +BLOCK_DIM - 1];
+  if(blockIdx.y > 0 && threadIdx.y == 0){
+    su0[threadIdx.x+1][0] = u0[idx*Ysize + idy - 1];
   }
-  if(blockIdx.x < Xsize/BLOCK_DIM + 1){
+  if(blockIdx.x < Xsize/BLOCK_DIM && threadIdx.x == BLOCK_DIM -1){
     su0[BLOCK_DIM + 1][threadIdx.y+1] = u0[(blockIdx.x+1)*BLOCK_DIM + idy];
   }
-  if(blockIdx.y < Ysize/BLOCK_DIM + 1){
+  if(blockIdx.y < Ysize/BLOCK_DIM && threadIdx.y == BLOCK_DIM -1){
     su0[threadIdx.x+1][BLOCK_DIM+1] = u0[idx*Ysize + (blockIdx.y + 1)*BLOCK_DIM];
   } 
   su0[threadIdx.x+1][threadIdx.y+1] = u0[idx*Ysize + idy];
@@ -168,7 +169,7 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 
 int main() {
   //long repeat = 500;
-  long T = 10; // total variation 
+  long T = 1; // total variation 
   long N = 1000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
@@ -180,6 +181,7 @@ int main() {
   RGBImage u0, f; //I1_ref;
   read_image(fname, &u0);
   read_image(fname, &f);
+  //read_image(fname, &u0_smem);
   //read_image(fname, &I1_ref);
   long Xsize = u0.Xsize;
   long Ysize = u0.Ysize;
@@ -193,7 +195,8 @@ int main() {
   //printf("CPU flops = %fGFlop/s\n", repeat * 2*(Xsize-FWIDTH)*(Ysize-FWIDTH)*FWIDTH*FWIDTH/tt*1e-9);
 
   // Allocate GPU memory
-  float *u0gpu, *fgpu, *u1gpu, *dugpu, *hfgpu, *errgpu, *err;
+  float *u0gpu, *u0smem, *fgpu, *u1gpu, *dugpu, *hfgpu, *errgpu, *err;
+  cudaMalloc(&u0smem, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&u0gpu, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&fgpu, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&u1gpu, 3*Xsize*Ysize*sizeof(float));
@@ -204,6 +207,7 @@ int main() {
  
   cudaMemcpy(u0gpu, u0.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(fgpu, f.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(u0smem, u0.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
 
   // Create streams
   cudaStream_t streams[3];
@@ -266,18 +270,18 @@ int main() {
   cudaDeviceSynchronize();
   t.tic();
   for (long n = 0; n < T; n++) {
-    norm_upd_smem<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-    norm_upd_smem<<<gridDim,blockDim, 1, streams[1]>>>(dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, u0gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-    norm_upd_smem<<<gridDim,blockDim, 2, streams[2]>>>(dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, u0gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, eps, del, h, Xsize, Ysize);
+    norm_upd_smem<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0smem+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
+    norm_upd_smem<<<gridDim,blockDim, 1, streams[1]>>>(dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, u0smem+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, eps, del, h, Xsize, Ysize);
+    norm_upd_smem<<<gridDim,blockDim, 2, streams[2]>>>(dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, u0smem+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, eps, del, h, Xsize, Ysize);
 
     cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
     float norm_err = norm(err,Xsize,Ysize);
     printf("TV iters: %d, err: %f\n", n, norm_err);
 
     for (long k = 0; k < N; k++) {
-      GPU_jacobi_smem<<<gridDim,blockDim, 0, streams[0]>>>(u0gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, Xsize, Ysize, h, dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, lambda);
-      GPU_jacobi_smem<<<gridDim,blockDim, 1, streams[1]>>>(u0gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, lambda);
-      GPU_jacobi_smem<<<gridDim,blockDim, 2, streams[2]>>>(u0gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, Xsize, Ysize, h, dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, lambda);
+      GPU_jacobi_smem<<<gridDim,blockDim, 0, streams[0]>>>(u0smem+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, Xsize, Ysize, h, dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, lambda);
+      GPU_jacobi_smem<<<gridDim,blockDim, 1, streams[1]>>>(u0smem+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, lambda);
+      GPU_jacobi_smem<<<gridDim,blockDim, 2, streams[2]>>>(u0smem+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, Xsize, Ysize, h, dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, lambda);
 
       if (k%100 == 0) {
         cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
@@ -290,7 +294,7 @@ int main() {
   cudaDeviceSynchronize();
   tt = t.toc();
   printf("GPU time = %fs\n", tt);
-  cudaMemcpy(u0.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(u0.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
   write_image("GPU_smem.ppm", u0);
 
@@ -302,6 +306,7 @@ int main() {
   cudaStreamDestroy(streams[1]);
   cudaStreamDestroy(streams[2]);
   cudaFree(u0gpu);
+  cudaFree(u0smem);
   cudaFree(u1gpu);
   cudaFree(fgpu);
   cudaFree(dugpu);
