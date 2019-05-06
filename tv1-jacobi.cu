@@ -205,7 +205,7 @@ int main() {
   float del = 1e-4;
   float lambda = 5; 
   float mu = 0;
-  float sigma = 25;
+  float sigma = 50;
 
   const char fname[] = "bike.ppm";
 
