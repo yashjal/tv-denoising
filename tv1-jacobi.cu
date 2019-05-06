@@ -3,12 +3,42 @@
 #include <math.h>
 #include <omp.h>
 #include "utils.h"
+#include <stdlib.h>
 
 struct RGBImage {
   long Xsize;
   long Ysize;
   float* A;
 };
+
+float randn (float mu, float sigma) {
+  float U1, U2, W, mult;
+  static float X1, X2;
+  static int call = 0;
+ 
+  if (call == 1)
+    {
+      call = !call;
+      return (mu + sigma * (float) X2);
+    }
+ 
+  do
+    {
+      U1 = -1 + ((float) rand () / RAND_MAX) * 2;
+      U2 = -1 + ((float) rand () / RAND_MAX) * 2;
+      W = pow (U1, 2) + pow (U2, 2);
+    }
+  while (W >= 1 || W == 0);
+ 
+  mult = sqrt ((-2 * log (W)) / W);
+  X1 = U1 * mult;
+  X2 = U2 * mult;
+ 
+  call = !call;
+ 
+  return (mu + sigma * (float) X1);
+}
+
 void read_image(const char* fname, RGBImage* I) {
   I->Xsize = 0;
   I->Ysize = 0;
@@ -174,18 +204,33 @@ int main() {
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 1; 
+  float mu = 0;
+  float sigma = 3;
 
   const char fname[] = "bike.ppm";
 
   // Load image from file
-  RGBImage u0, f; //I1_ref;
+  RGBImage u0, f, unoise; //I1_ref;
   read_image(fname, &u0);
   read_image(fname, &f);
+ 
   //read_image(fname, &u0_smem);
   //read_image(fname, &I1_ref);
   long Xsize = u0.Xsize;
   long Ysize = u0.Ysize;
+  unoise.Xsize = Xsize;
+  unoise.Ysize = Ysize;
   float h = 1.0/Xsize;
+  unoise.A = (float*) malloc(3*Xsize*Ysize*sizeof(float));  
+
+  for(int c = 0; c < 3; c++){
+    for(int i = 0; i < Xsize; i++){
+      for(int j =0; j < Ysize; j++) {
+        unoise.A[c*Xsize*Ysize + i*Ysize + j] = u0.A[c*Xsize*Ysize + i*Ysize + j] + randn(mu,sigma);
+    }
+   }
+  }
+ write_image("bike_noise.ppm",unoise);
   // denoise on CPU
   Timer t;
   //t.tic();
@@ -205,9 +250,9 @@ int main() {
   cudaMalloc(&errgpu, 3*Xsize*Ysize*sizeof(float));
   err = (float*)malloc(3*Xsize*Ysize*sizeof(float));
  
-  cudaMemcpy(u0gpu, u0.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(fgpu, f.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(u0smem, u0.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(u0gpu, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(fgpu, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(u0smem, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
 
   // Create streams
   cudaStream_t streams[3];
@@ -314,6 +359,7 @@ int main() {
   cudaFree(errgpu);
   free_image(&u0);
   free_image(&f);
+  free_image(&unoise);
   free(err);
   //free_image(&I1_ref);
   return 0;
