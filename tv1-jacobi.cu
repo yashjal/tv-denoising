@@ -210,8 +210,8 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 }
 
 int main() {
-  long T = 20; // total variation 
-  long N = 20; // jacobi
+  long T = 1; // total variation 
+  long N = 10; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 5; 
@@ -235,8 +235,8 @@ int main() {
     for(int i = 1; i < Xsize+1; i++){
       for(int j = 1; j < Ysize+1; j++) {
         unoise.A[c*(Xsize+2)*(Ysize+2) + i*(Ysize+2) + j] = u0.A[c*Xsize*Ysize + i*Ysize + j] + randn(mu,sigma);
-     }
-   }
+      }
+    }
   }
 
   Xsize = Xsize + 2;
@@ -247,7 +247,6 @@ int main() {
   for(int c = 0; c < 3; c++){
     for(int i = 0; i < Xsize; i++){
       for(int j = 0; j < Ysize; j++) {
-       // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j])
         if (i == 0) {
           unoise.A[c*Xsize*Ysize+ + i*Ysize + j] = unoise.A[c*Xsize*Ysize + (i+2)*Ysize + j];
         } 
@@ -272,16 +271,7 @@ int main() {
   //gcvt(lambda,2,lam_buf);
   //gcvt((float)T,3,T_buf);
 
-  //const char* name1 = "noise_"+sigma_buf+".ppm";
-  //write_image("car_noise_2_50.ppm",unoise);
-  // denoise on CPU
   Timer t;
-  //t.tic();
-  //for (long i = 0; i < repeat; i++) CPU_convolution(I1_ref.A, I0.A, Xsize, Ysize);
-  //double tt = t.toc();
-  //printf("CPU time = %fs\n", tt);
-  //printf("CPU flops = %fGFlop/s\n", repeat * 2*(Xsize-FWIDTH)*(Ysize-FWIDTH)*FWIDTH*FWIDTH/tt*1e-9);
-
   // Allocate GPU memory
   float *u0gpu, *u0smem, *fgpu, *u1gpu, *dugpu, *hfgpu, *errgpu, *err;
   cudaMalloc(&u0smem, 3*Xsize*Ysize*sizeof(float));
@@ -303,7 +293,6 @@ int main() {
   cudaStreamCreate(&streams[1]);
   cudaStreamCreate(&streams[2]);
 
-  // Dry run
   dim3 blockDim(BLOCK_DIM, BLOCK_DIM);
   dim3 gridDim(Xsize/BLOCK_DIM+1, Ysize/BLOCK_DIM+1);
 
