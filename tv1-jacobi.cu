@@ -211,12 +211,12 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 
 int main() {
   long T = 1; // total variation 
-  long N = 10; // jacobi
+  long N = 100; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 5; 
   float mu = 0;
-  float sigma = 100;
+  float sigma = 0;
 
   const char fname[] = "car.ppm";
 
