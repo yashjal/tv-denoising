@@ -100,8 +100,8 @@ __global__ void norm_upd(float* du, float* hf, float* u, float* f, float* err, f
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
 
   if (idx > 0 && idy > 0 && idx < Xsize-1 && idy < Ysize-1) {
-    float ux = (u[(idx+1)*Ysize+idy] - u[(idx-1)*Ysize+idy])/h;
-    float uy = (u[idx*Ysize+(idy+1)] - u[idx*Ysize+(idy-1)])/h;
+    float ux = (u[(idx+1)*Ysize+idy] - u[(idx-1)*Ysize+idy])/(2*h);
+    float uy = (u[idx*Ysize+(idy+1)] - u[idx*Ysize+(idy-1)])/(2*h);
     du[idx*Ysize+idy] = sqrt(ux*ux + uy*uy + eps);
     float uf = u[idx*Ysize+idy]-f[idx*Ysize+idy];
     hf[idx*Ysize+idy] = sqrt(uf*uf + del);
@@ -357,11 +357,11 @@ int main() {
         }
       }
     }
-  }
+  
   write_image("car_nsmem_2_50.ppm", u0);
 
   cudaDeviceSynchronize();
-/*
+ /*
   t.tic();
   for (long n = 0; n < T; n++) {
     norm_upd_smem<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0smem+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
@@ -388,11 +388,11 @@ int main() {
   cudaDeviceSynchronize();
   tt = t.toc();
   printf("GPU time = %fs\n", tt);
-  cudaMemcpy(u0.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(unoise.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
    write_image("car_smem_2_50.ppm", u0);
+ */
 
-*/
 
   // Free memory
   cudaStreamDestroy(streams[0]);
