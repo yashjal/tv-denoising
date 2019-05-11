@@ -210,8 +210,8 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 }
 
 int main() {
-  long T = 50; // total variation 
-  long N = 10; // jacobi
+  long T = 1; // total variation 
+  long N = 1000; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 5; 
@@ -342,7 +342,7 @@ int main() {
     for(int i = 1; i < (Xsize-1); i++){
       for(int j = 1; j < (Ysize-1); j++) {
         u0.A[c*(Xsize-2)*(Ysize-2)+ (i-1)*(Ysize-2) + (j-1)] = unoise.A[c*Xsize*Ysize + i*Ysize + j]; 
-     }
+      }
     }
   }
   write_image("car_nsmem_2_50.ppm", u0);
