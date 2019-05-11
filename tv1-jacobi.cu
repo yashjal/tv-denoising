@@ -210,7 +210,6 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 }
 
 int main() {
-  //long repeat = 500;
   long T = 20; // total variation 
   long N = 20; // jacobi
   float eps = 1e-4;
@@ -222,12 +221,9 @@ int main() {
   const char fname[] = "car.ppm";
 
   // Load image from file
-  RGBImage u0, f, unoise; //I1_ref;
+  RGBImage u0, unoise;
   read_image(fname, &u0);
-  //read_image(fname, &f);
  
-  //read_image(fname, &u0_smem);
-  //read_image(fname, &I1_ref);
   long Xsize = u0.Xsize;
   long Ysize = u0.Ysize;
   unoise.Xsize = Xsize+2;
@@ -238,7 +234,6 @@ int main() {
   for(int c = 0; c < 3; c++){
     for(int i = 1; i < Xsize+1; i++){
       for(int j = 1; j < Ysize+1; j++) {
-       // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j])
         unoise.A[c*(Xsize+2)*(Ysize+2) + i*(Ysize+2) + j] = u0.A[c*Xsize*Ysize + i*Ysize + j] + randn(mu,sigma);
      }
    }
@@ -250,16 +245,19 @@ int main() {
   write_image("car_noise_2_50.ppm",unoise);
  
   for(int c = 0; c < 3; c++){
-    for(int i = 0; i < Xsize; i+=(Xsize-1)){
-      for(int j = 0; j < Ysize; j+=(Ysize-1)) {
+    for(int i = 0; i < Xsize; i++){
+      for(int j = 0; j < Ysize; j++) {
        // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j])
         if (i == 0) {
           unoise.A[c*Xsize*Ysize+ + i*Ysize + j] = unoise.A[c*Xsize*Ysize + (i+2)*Ysize + j];
-        } else if (j == 0) {
+        } 
+        if (j == 0) {
           unoise.A[c*Xsize*Ysize + i*Ysize + j] = unoise.A[c*Xsize*Ysize + i*Ysize + j+2];
-        } else if (i == Xsize-1) {
+        } 
+        if (i == Xsize-1) {
           unoise.A[c*Xsize*Ysize + i*Ysize + j] = unoise.A[c*Xsize*Ysize + (i-2)*Ysize + j];
-        } else if (j == Ysize-1) {
+        }
+        if (j == Ysize-1) {
 	  unoise.A[c*Xsize*Ysize + i*Ysize + j] = unoise.A[c*Xsize*Ysize+ + i*Ysize + j-2];
         }
       }
@@ -355,11 +353,9 @@ int main() {
     for(int i = 1; i < (Xsize-1); i++){
       for(int j = 1; j < (Ysize-1); j++) {
         u0.A[c*(Xsize-2)*(Ysize-2)+ (i-1)*(Ysize-2) + (j-1)] = unoise.A[c*Xsize*Ysize + i*Ysize + j]; 
-        //printf("c, i, j: %d,%d,%d\n", c,i,j);
      }
     }
   }
-  //printf("here\n");
   write_image("car_nsmem_2_50.ppm", u0);
 
   cudaDeviceSynchronize();
