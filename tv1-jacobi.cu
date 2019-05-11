@@ -99,15 +99,15 @@ __global__ void norm_upd(float* du, float* hf, float* u, float* f, float* err, f
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
 
-  if (idx > 0 && idy > 0 && idx < Xsize && idy < Ysize) {
-    float ux = (u[idx*Ysize+idy] - u[(idx-1)*Ysize+idy])/h;
-    float uy = (u[idx*Ysize+idy] - u[idx*Ysize+(idy-1)])/h;
+  if (idx > 0 && idy > 0 && idx < Xsize-1 && idy < Ysize-1) {
+    float ux = (u[(idx+1)*Ysize+idy] - u[(idx-1)*Ysize+idy])/h;
+    float uy = (u[idx*Ysize+(idy+1)] - u[idx*Ysize+(idy-1)])/h;
     du[idx*Ysize+idy] = sqrt(ux*ux + uy*uy + eps);
     float uf = u[idx*Ysize+idy]-f[idx*Ysize+idy];
     hf[idx*Ysize+idy] = sqrt(uf*uf + del);
   }
   
-  __syncthreads(); 
+  __syncthreads();
  
   err[idx*Ysize+idy] = du[idx*Ysize+idy] + hf[idx*Ysize+idy];
 }
@@ -123,6 +123,18 @@ __global__ void GPU_jacobi(float* u0, float* u1, float *f, float* err, long Xsiz
   __syncthreads();
   if (idx > 0 && idx < Xsize-1 && idy > 0 && idy < Ysize-1) {
     u0[idx*Ysize+idy] = u1[idx*Ysize+idy];
+  }
+  if (idx == 0) {
+    u0[idx*Ysize+idy] = u1[(idx+2)*Ysize+idy];
+  }
+  if (idy == 0) {
+    u0[idx*Ysize+idy] = u1[idx*Ysize+(idy+2)];
+  }
+  if (idx == Xsize-1) {
+    u0[idx*Ysize+idy] = u1[(idx-2)*Ysize+idy];
+  }
+  if (idy == Ysize-1) {
+    u0[idx*Ysize+idy] = u1[idx*Ysize+(idy-2)];
   }
   __syncthreads();
   if (idx > 0 && idx < Xsize-1 && idy > 0 && idy < Ysize-1) {
@@ -212,24 +224,46 @@ int main() {
   // Load image from file
   RGBImage u0, f, unoise; //I1_ref;
   read_image(fname, &u0);
-  read_image(fname, &f);
+  //read_image(fname, &f);
  
   //read_image(fname, &u0_smem);
   //read_image(fname, &I1_ref);
   long Xsize = u0.Xsize;
   long Ysize = u0.Ysize;
-  unoise.Xsize = Xsize;
-  unoise.Ysize = Ysize;
+  unoise.Xsize = Xsize+2;
+  unoise.Ysize = Ysize+2;
   float h = 1.0/Xsize;
-  unoise.A = (float*) malloc(3*Xsize*Ysize*sizeof(float));  
+  unoise.A = (float*) malloc(3*(Xsize+2)*(Ysize+2)*sizeof(float));  
   
   for(int c = 0; c < 3; c++){
-    for(int i = 0; i < Xsize; i++){
-      for(int j =0; j < Ysize; j++) {
-       // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j]);
-        unoise.A[c*Xsize*Ysize + i*Ysize + j] = u0.A[c*Xsize*Ysize + i*Ysize + j] + randn(mu,sigma);
+    for(int i = 1; i < Xsize+1; i++){
+      for(int j = 1; j < Ysize+1; j++) {
+       // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j])
+        unoise.A[c*(Xsize+2)*(Ysize+2) + i*(Ysize+2) + j] = u0.A[c*Xsize*Ysize + i*Ysize + j] + randn(mu,sigma);
      }
    }
+  }
+
+  Xsize = Xsize + 2;
+  Ysize = Ysize + 2;
+  
+  write_image("car_noise_2_50.ppm",unoise);
+ 
+  for(int c = 0; c < 3; c++){
+    for(int i = 0; i < Xsize; i+=Xsize-1){
+      for(int j = 0; j < Ysize; j+=Ysize-1) {
+       // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j])
+        if (i == 0) {
+          unoise.A[c*Xsize*Ysize+ + i*Ysize + j] = unoise.A[c*Xsize*Ysize + (i+2)*Ysize + j];
+        } else if (j == 0) {
+          unoise.A[c*Xsize*Ysize + i*Ysize + j] = unoise.A[c*Xsize*Ysize + i*Ysize + j+2];
+        } else if (i == Xsize-1) {
+          unoise.A[c*Xsize*Ysize + i*Ysize + j] = unoise.A[c*Xsize*Ysize + (i-2)*Ysize + j];
+        } else if (j == Ysize-1) {
+	  unoise.A[c*Xsize*Ysize + i*Ysize + j] = unoise.A[c*Xsize*Ysize+ + i*Ysize + j-2];
+        }
+      }
+    }
   }
   //char sigma_buf[10];
   //char T_buf[10];
@@ -239,7 +273,7 @@ int main() {
   //gcvt((float)T,3,T_buf);
 
   //const char* name1 = "noise_"+sigma_buf+".ppm";
-  write_image("car_noise_2_50.ppm",unoise);
+  //write_image("car_noise_2_50.ppm",unoise);
   // denoise on CPU
   Timer t;
   //t.tic();
@@ -272,11 +306,6 @@ int main() {
   // Dry run
   dim3 blockDim(BLOCK_DIM, BLOCK_DIM);
   dim3 gridDim(Xsize/BLOCK_DIM+1, Ysize/BLOCK_DIM+1);
-  /*
-  GPU_convolution<<<gridDim,blockDim, 0, streams[0]>>>(I1gpu+0*Xsize*Ysize, I0gpu+0*Xsize*Ysize, Xsize, Ysize);
-  GPU_convolution<<<gridDim,blockDim, 0, streams[1]>>>(I1gpu+1*Xsize*Ysize, I0gpu+1*Xsize*Ysize, Xsize, Ysize);
-  GPU_convolution<<<gridDim,blockDim, 0, streams[2]>>>(I1gpu+2*Xsize*Ysize, I0gpu+2*Xsize*Ysize, Xsize, Ysize);
-  */
 
   // denoise on GPU
   cudaDeviceSynchronize();
@@ -317,12 +346,22 @@ int main() {
 
   // Write output
   // write_image("CPU.ppm", I1_ref);
-  cudaMemcpy(u0.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(unoise.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
   
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  for(int c = 0; c < 3; c++){
+    for(int i = 1; i < Xsize-1; i++){
+      for(int j = 1; j < Ysize-1; j++) {
+       // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j])
+          u0.A[c*(Xsize-2)*(Ysize-2)+ (i-1)*Ysize + (j-1)] = unoise.A[c*Xsize*Ysize + i*Ysize + j];
+        }
+      }
+    }
+  }
   write_image("car_nsmem_2_50.ppm", u0);
 
   cudaDeviceSynchronize();
+/*
   t.tic();
   for (long n = 0; n < T; n++) {
     norm_upd_smem<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0smem+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
@@ -353,6 +392,7 @@ int main() {
  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
    write_image("car_smem_2_50.ppm", u0);
 
+*/
 
   // Free memory
   cudaStreamDestroy(streams[0]);
@@ -366,7 +406,7 @@ int main() {
   cudaFree(hfgpu);
   cudaFree(errgpu);
   free_image(&u0);
-  free_image(&f);
+  //free_image(&f);
   free_image(&unoise);
   free(err);
   //free_image(&I1_ref);
