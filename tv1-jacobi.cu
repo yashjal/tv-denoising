@@ -216,7 +216,7 @@ int main() {
   float del = 1e-4;
   float lambda = 5; 
   float mu = 0;
-  float sigma = 50;
+  float sigma = 100;
 
   const char fname[] = "car.ppm";
 
