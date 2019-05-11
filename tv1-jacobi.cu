@@ -217,7 +217,7 @@ int main() {
   float del = 1e-4;
   float lambda = 5; 
   float mu = 0;
-  float sigma = 150;
+  float sigma = 50;
 
   const char fname[] = "car.ppm";
 
@@ -250,8 +250,8 @@ int main() {
   write_image("car_noise_2_50.ppm",unoise);
  
   for(int c = 0; c < 3; c++){
-    for(int i = 0; i < Xsize; i+=Xsize-1){
-      for(int j = 0; j < Ysize; j+=Ysize-1) {
+    for(int i = 0; i < Xsize; i+=(Xsize-1)){
+      for(int j = 0; j < Ysize; j+=(Ysize-1)) {
        // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j])
         if (i == 0) {
           unoise.A[c*Xsize*Ysize+ + i*Ysize + j] = unoise.A[c*Xsize*Ysize + (i+2)*Ysize + j];
@@ -265,6 +265,8 @@ int main() {
       }
     }
   }
+  
+  write_image("car_noise_2_50_border.ppm",unoise);
   //char sigma_buf[10];
   //char T_buf[10];
   //char lam_buf[10];
@@ -347,17 +349,17 @@ int main() {
   // Write output
   // write_image("CPU.ppm", I1_ref);
   cudaMemcpy(unoise.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  
+ 
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
   for(int c = 0; c < 3; c++){
-    for(int i = 1; i < Xsize-1; i++){
-      for(int j = 1; j < Ysize-1; j++) {
-       // printf("%f\n", u0.A[c*Xsize*Ysize + i*Ysize +j])
-          u0.A[c*(Xsize-2)*(Ysize-2)+ (i-1)*Ysize + (j-1)] = unoise.A[c*Xsize*Ysize + i*Ysize + j];
-        }
-      }
+    for(int i = 1; i < (Xsize-1); i++){
+      for(int j = 1; j < (Ysize-1); j++) {
+        u0.A[c*(Xsize-2)*(Ysize-2)+ (i-1)*(Ysize-2) + (j-1)] = unoise.A[c*Xsize*Ysize + i*Ysize + j]; 
+        //printf("c, i, j: %d,%d,%d\n", c,i,j);
+     }
     }
-  
+  }
+  //printf("here\n");
   write_image("car_nsmem_2_50.ppm", u0);
 
   cudaDeviceSynchronize();
