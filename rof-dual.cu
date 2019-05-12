@@ -419,8 +419,8 @@ __global__ void rof_gsmem(float* px, float* py, float* f, float lambda, float ta
   }
   __syncthreads();
   if (idx < Xsize-1 && idy < Ysize-1) {
-    gradx[threadIdx.x+1][threadIdx.y+1] = u[threadIdx.x+1][threadIdx.y]-u[threadIdx.x][threadIdx.y];
-    grady[threadIdx.x+1][threadIdx.y+1] = u[threadIdx.x][threadIdx.y+1]-u[threadIdx.x][threadIdx.y];  
+    gradx[threadIdx.x+1][threadIdx.y+1] = u[threadIdx.x+2][threadIdx.y+1]-u[threadIdx.x+1][threadIdx.y+1];
+    grady[threadIdx.x+1][threadIdx.y+1] = u[threadIdx.x+1][threadIdx.y+2]-u[threadIdx.x+1][threadIdx.y+1];  
   }
   if (blockIdx.x>0 && threadIdx.x == 0){ 
     gradx[0][threadIdx.y+1] = u[1][threadIdx.y+1]-u[0][threadIdx.y+1];
