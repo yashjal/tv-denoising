@@ -305,8 +305,8 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
     uy = 0;//-p1y[idx*Ysize + idy-1];
   }
   if (idx > 0 && idx < Xsize -1 && idy > 0 && idy < Ysize-1){
-    ux = p1x[idx*Ysize + idy] - p1x[(idx-1)*Ysize + idy];
-    uy = p1y[idx*Ysize + idy] - p1y[idx*Ysize + idy-1];
+    ux = (p1x[(idx+1)*Ysize + idy] - p1x[(idx-1)*Ysize + idy])/2.0;
+    uy = (p1y[idx*Ysize + idy+1] - p1y[idx*Ysize + idy-1])/2.0;
   }
   div[idx*Ysize + idy] = ux + uy;
   p0x[idx*Ysize + idy] = p1x[idx*Ysize + idy];
