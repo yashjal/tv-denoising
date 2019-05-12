@@ -321,7 +321,7 @@ int main(int argc, char * argv[] ) {
   float mu = 0;
   float sigma;
   float tau = 0.245;
-  const char fname[] = "avengers.ppm";
+  const char fname[] = "car.ppm";
   
   sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
@@ -348,7 +348,7 @@ int main(int argc, char * argv[] ) {
   }
 
   
-  write_image("noise.ppm",unoise);
+  write_image("car_noise.ppm",unoise);
  
   //char sigma_buf[10];
   //char T_buf[10];
@@ -385,7 +385,7 @@ int main(int argc, char * argv[] ) {
 
   dim3 blockDim(BLOCK_DIM, BLOCK_DIM);
   dim3 gridDim(Xsize/BLOCK_DIM+1, Ysize/BLOCK_DIM+1);
-  printf("before kernel\n");
+  //printf("before kernel\n");
   // denoise on GPU
   cudaDeviceSynchronize();
   t.tic();
@@ -417,7 +417,7 @@ int main(int argc, char * argv[] ) {
   cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("nsmem.ppm", u0);
+  write_image("car_nsmem.ppm", u0);
 
   /*
   cudaDeviceSynchronize();
