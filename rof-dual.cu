@@ -285,8 +285,8 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
   }
   float numy = p0y[idx*Ysize+idy] + (tau/lambda)*grady[idx*Ysize+idy];
   float numx = p0x[idx*Ysize+idy] + (tau/lambda)*gradx[idx*Ysize+idy];
-  p1x[idx*Ysize + idy] = numx/max(1, abs(numx)); 
-  p1y[idx*Ysize+idy] = numy/max(1,abs(numy));
+  p1x[idx*Ysize + idy] = numx/max(1.0, abs(numx)); 
+  p1y[idx*Ysize+idy] = numy/max(1.0,abs(numy));
   __syncthreads();
 
   int idx2 = (idx-1)*Ysize+idy;
@@ -317,18 +317,16 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
 
 int main(int argc, char * argv[] ) {
   long T ; // total variation 
-  long N ; // jacobi
-  float eps = 1e-4;
-  float del = 1e-4;
   float lambda; 
   float mu = 0;
   float sigma;
+  float tau = 0.1;
   const char fname[] = "gs_owl.ppm";
   
   sscanf(argv[1],"%d",&T);
-  sscanf(argv[2],"%d",&N);
-  sscanf(argv[3],"%f",&lambda);
-  sscanf(argv[4],"%f",&sigma);
+  //sscanf(argv[2],"%d",&N);
+  sscanf(argv[2],"%f",&lambda);
+  sscanf(argv[3],"%f",&sigma);
    
   // Load image from file
   RGBImage u0, unoise;
@@ -361,19 +359,23 @@ int main(int argc, char * argv[] ) {
 
   Timer t;
   // Allocate GPU memory
-  float *u0gpu, *u0smem, *fgpu, *u1gpu, *dugpu, *hfgpu, *errgpu, *err;
-  cudaMalloc(&u0smem, 3*Xsize*Ysize*sizeof(float));
-  cudaMalloc(&u0gpu, 3*Xsize*Ysize*sizeof(float));
+  float *ugpu, *fgpu, *p1xgpu, *p1ygpu, *p0xgpu, *p0ygpu, *gradx, *grady, *div;
+  //cudaMalloc(&usmem, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&ugpu, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&fgpu, 3*Xsize*Ysize*sizeof(float));
-  cudaMalloc(&u1gpu, 3*Xsize*Ysize*sizeof(float));
-  cudaMalloc(&dugpu, 3*Xsize*Ysize*sizeof(float));
-  cudaMalloc(&hfgpu, 3*Xsize*Ysize*sizeof(float));
-  cudaMalloc(&errgpu, 3*Xsize*Ysize*sizeof(float));
-  err = (float*)malloc(3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&p1xgpu, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&p1ygpu, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&p0xgpu, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&p0ygpu, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&gradx, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&grady, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&div, 3*Xsize*Ysize*sizeof(float));
+
+  //err = (float*)malloc(3*Xsize*Ysize*sizeof(float));
  
-  cudaMemcpy(u0gpu, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(ugpu, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(fgpu, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(u0smem, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
+  //cudaMemcpy(usmem, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
 
   // Create streams
   cudaStream_t streams[3];
@@ -383,31 +385,20 @@ int main(int argc, char * argv[] ) {
 
   dim3 blockDim(BLOCK_DIM, BLOCK_DIM);
   dim3 gridDim(Xsize/BLOCK_DIM+1, Ysize/BLOCK_DIM+1);
-
+  printf("before kernel\n");
   // denoise on GPU
   cudaDeviceSynchronize();
   t.tic();
   for (long n = 0; n < T; n++) {
-    norm_upd<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-    norm_upd<<<gridDim,blockDim, 1, streams[1]>>>(dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, u0gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-    norm_upd<<<gridDim,blockDim, 2, streams[2]>>>(dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, u0gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-    
-    //cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+    rof<<<gridDim,blockDim, 0, streams[0]>>>(ugpu+0*Xsize*Ysize, p0xgpu+0*Xsize*Ysize, p1xgpu+0*Xsize*Ysize, p0ygpu+0*Xsize*Ysize, p1ygpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, gradx+0*Xsize*Ysize, grady+0*Xsize*Ysize, lambda, tau, Xsize, Ysize, h, div+0*Xsize*Ysize);
+    rof<<<gridDim,blockDim, 1, streams[1]>>>(ugpu+1*Xsize*Ysize, p0xgpu+1*Xsize*Ysize, p1xgpu+1*Xsize*Ysize, p0ygpu+1*Xsize*Ysize, p1ygpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, gradx+1*Xsize*Ysize, grady+1*Xsize*Ysize, lambda, tau, Xsize, Ysize, h, div+1*Xsize*Ysize);
+    rof<<<gridDim,blockDim, 2, streams[2]>>>(ugpu+2*Xsize*Ysize, p0xgpu+2*Xsize*Ysize, p1xgpu+2*Xsize*Ysize, p0ygpu+2*Xsize*Ysize, p1ygpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, gradx+2*Xsize*Ysize, grady+2*Xsize*Ysize, lambda, tau, Xsize, Ysize, h, div+2*Xsize*Ysize);
+
+    //cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);cudaFree(p0xgpu);
+
     //float norm_err = norm(err,Xsize,Ysize);
     //printf("TV iters: %d, err: %f\n", n, norm_err); 
- 
-    for (long k = 0; k < N; k++) {
-      GPU_jacobi<<<gridDim,blockDim, 0, streams[0]>>>(u0gpu+0*Xsize*Ysize, u1gpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, Xsize, Ysize, h, dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, lambda);
-      GPU_jacobi<<<gridDim,blockDim, 1, streams[1]>>>(u0gpu+1*Xsize*Ysize, u1gpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, lambda);
-      GPU_jacobi<<<gridDim,blockDim, 2, streams[2]>>>(u0gpu+2*Xsize*Ysize, u1gpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, Xsize, Ysize, h, dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, lambda);
-      
-     /* if (k%2 == 0) {
-        cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-        float norm_err = norm(err,Xsize,Ysize);
-        printf("Jacobi iters: %d, err: %f\n", k, norm_err);
-      }*/
-      
-    }
+    
   }
   cudaDeviceSynchronize();
   double tt = t.toc();
@@ -423,11 +414,12 @@ int main(int argc, char * argv[] ) {
 
   // Write output
   // write_image("CPU.ppm", I1_ref);
-  cudaMemcpy(u0.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
   write_image("nsmem.ppm", u0);
 
+  /*
   cudaDeviceSynchronize();
  
   t.tic();
@@ -435,15 +427,11 @@ int main(int argc, char * argv[] ) {
     norm_upd_smem<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0smem+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
     norm_upd_smem<<<gridDim,blockDim, 1, streams[1]>>>(dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, u0smem+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, eps, del, h, Xsize, Ysize);
     norm_upd_smem<<<gridDim,blockDim, 2, streams[2]>>>(dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, u0smem+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-
+*/
     /*cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
     float norm_err = norm(err,Xsize,Ysize);
     printf("TV iters: %d, err: %f\n", n, norm_err);*/
 
-    for (long k = 0; k < N; k++) {
-      GPU_jacobi_smem<<<gridDim,blockDim, 0, streams[0]>>>(u0smem+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, Xsize, Ysize, h, dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, lambda);
-      GPU_jacobi_smem<<<gridDim,blockDim, 1, streams[1]>>>(u0smem+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, Xsize, Ysize, h, dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, lambda);
-      GPU_jacobi_smem<<<gridDim,blockDim, 2, streams[2]>>>(u0smem+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, Xsize, Ysize, h, dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, lambda);
 
      /* if (k%2 == 0) {
         cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
@@ -451,30 +439,33 @@ int main(int argc, char * argv[] ) {
         printf("Jacobi iters: %d, err: %f\n", k, norm_err);
       }*/
 
-    }
-  }
-  cudaDeviceSynchronize();
-  tt = t.toc();
-  printf("GPU time = %fs\n", tt);
-  cudaMemcpy(unoise.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+    //}
+  //}
+  //cudaDeviceSynchronize();
+  //tt = t.toc();
+  //printf("GPU time = %fs\n", tt);
+  //cudaMemcpy(unoise.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-   write_image("smem.ppm", u0);
+   //write_image("smem.ppm", u0);
 
   // Free memory
   cudaStreamDestroy(streams[0]);
   cudaStreamDestroy(streams[1]);
   cudaStreamDestroy(streams[2]);
-  cudaFree(u0gpu);
-  cudaFree(u0smem);
-  cudaFree(u1gpu);
+  cudaFree(ugpu);
+  //cudaFree(usmem);
+  cudaFree(p1xgpu);
   cudaFree(fgpu);
-  cudaFree(dugpu);
-  cudaFree(hfgpu);
-  cudaFree(errgpu);
+  cudaFree(p1ygpu);
+  cudaFree(p0xgpu);
+  cudaFree(p0ygpu);
+  cudaFree(gradx);
+  cudaFree(grady);
+  cudaFree(div);
   free_image(&u0);
   //free_image(&f);
   free_image(&unoise);
-  free(err);
+  //free(err);
   //free_image(&I1_ref);
   return 0;
 }
