@@ -279,9 +279,9 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
 
   u[idx*Ysize + idy] = f[idx*Ysize + idy] + lambda*div[idx*Ysize+idy];
   __syncthreads();
-  if (idx < Xsize-1 && idy < Ysize-1) {
-     gradx[idx*Ysize+idy] = (u[(idx)*Ysize + idy] - u[(idx-1)*Ysize + idy]);
-     grady[idx*Ysize+idy] = (u[idx*Ysize + idy] - u[idx*Ysize + idy-1]);  
+  if (idx > 0 && idx < Xsize-1 && idy > 0 && idy < Ysize-1) {
+     gradx[idx*Ysize+idy] = (u[(idx+1)*Ysize + idy] - u[(idx-1)*Ysize + idy])/2.0;
+     grady[idx*Ysize+idy] = (u[idx*Ysize + idy+1] - u[idx*Ysize + idy-1])/2.0;  
   }
   float numx = p0x[idx*Ysize+idy] + (tau/lambda)*gradx[idx*Ysize+idy];
   float numy = p0y[idx*Ysize+idy] + (tau/lambda)*grady[idx*Ysize+idy];
