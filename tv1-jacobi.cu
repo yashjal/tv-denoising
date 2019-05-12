@@ -415,7 +415,7 @@ int main(int argc, char * argv[] ) {
   cudaDeviceSynchronize();
   tt = t.toc();
   printf("GPU time = %fs\n", tt);
-  cudaMemcpy(unoise.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(u0.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
    write_image("smem.ppm", u0);
 
