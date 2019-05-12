@@ -293,16 +293,16 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
   float uy;
 
   if ( idx == 0) {
-    ux = p1x[idx*Ysize + idy]; 
+    ux = 0;// p1x[idx*Ysize + idy]; 
   }  
   if (idx == Xsize -1 ) {
-    ux = -p1x[(idx-1)*Ysize + idy];
+    ux = 0;//-p1x[(idx-1)*Ysize + idy];
   }
   if (idy == 0){
-    uy = p1y[idx*Ysize + idy];
+    uy = 0;//p1y[idx*Ysize + idy];
   }
   if (idy == Ysize-1){
-    uy = -p1y[idx*Ysize + idy-1];
+    uy = 0;//-p1y[idx*Ysize + idy-1];
   }
   if (idx > 0 && idx < Xsize -1 && idy > 0 && idy < Ysize-1){
     ux = p1x[idx*Ysize + idy] - p1x[(idx-1)*Ysize + idy];
