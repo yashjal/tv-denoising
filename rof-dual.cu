@@ -316,7 +316,7 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
 
 int main(int argc, char * argv[] ) {
   long T ; // total variation 
-  float lambda = 0.5; 
+  float lambda = 10; 
   float mu = 0;
   float sigma;
   float tau = 0.245;
