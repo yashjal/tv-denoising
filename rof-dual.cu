@@ -413,10 +413,10 @@ int main(int argc, char * argv[] ) {
 
   // Write output
   // write_image("CPU.ppm", I1_ref);
-  cudaMemcpy(unoise.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("car_nsmem.ppm", unoise);
+  write_image("car_nsmem.ppm", u0);
 
   /*
   cudaDeviceSynchronize();
