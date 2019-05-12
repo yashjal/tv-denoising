@@ -276,18 +276,21 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, float* f, float* gradx, float* grady,  float lambda, float tau, long Xsize, long Ysize, float h, float* div){
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
-
-  u[idx*Ysize + idy] = f[idx*Ysize + idy] + lambda*div[idx*Ysize+idy];
+  if (idx < Xsize && idy < Ysize) {
+    u[idx*Ysize + idy] = f[idx*Ysize + idy] + lambda*div[idx*Ysize+idy];
+  }
   __syncthreads();
   if (idx > 0 && idx < Xsize-1 && idy > 0 && idy < Ysize-1) {
      gradx[idx*Ysize+idy] = (u[(idx+1)*Ysize + idy] - u[(idx-1)*Ysize + idy])/2.0;
      grady[idx*Ysize+idy] = (u[idx*Ysize + idy+1] - u[idx*Ysize + idy-1])/2.0;  
   }
-  float numx = p0x[idx*Ysize+idy] + (tau/lambda)*gradx[idx*Ysize+idy];
-  float numy = p0y[idx*Ysize+idy] + (tau/lambda)*grady[idx*Ysize+idy];
-  float norm = sqrt( numx*numx + numy*numy);
-  p1x[idx*Ysize + idy] = numx/max(1.0,norm); 
-  p1y[idx*Ysize+idy] = numy/max(1.0,norm);
+  if (idx < Xsize && idy < Ysize) {
+    float numx = p0x[idx*Ysize+idy] + (tau/lambda)*gradx[idx*Ysize+idy];
+    float numy = p0y[idx*Ysize+idy] + (tau/lambda)*grady[idx*Ysize+idy];
+    float norm = sqrt( numx*numx + numy*numy);
+    p1x[idx*Ysize + idy] = numx/max(1.0,norm); 
+    p1y[idx*Ysize+idy] = numy/max(1.0,norm);
+  }
   __syncthreads();
   float ux;
   float uy;
@@ -308,10 +311,11 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
     ux = (p1x[(idx+1)*Ysize + idy] - p1x[(idx-1)*Ysize + idy])/2.0;
     uy = (p1y[idx*Ysize + idy+1] - p1y[idx*Ysize + idy-1])/2.0;
   }
-  div[idx*Ysize + idy] = ux + uy;
-  p0x[idx*Ysize + idy] = p1x[idx*Ysize + idy];
-  p0y[idx*Ysize + idy] = p1y[idx*Ysize + idy];
-
+  if (idx < Xsize && idy < Ysize) {
+    div[idx*Ysize + idy] = ux + uy;
+    p0x[idx*Ysize + idy] = p1x[idx*Ysize + idy];
+    p0y[idx*Ysize + idy] = p1y[idx*Ysize + idy];
+  }
 }
 
 int main(int argc, char * argv[] ) {
