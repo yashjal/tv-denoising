@@ -285,31 +285,30 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
   }
   float numx = p0x[idx*Ysize+idy] + (tau/lambda)*gradx[idx*Ysize+idy];
   float numy = p0y[idx*Ysize+idy] + (tau/lambda)*grady[idx*Ysize+idy];
-  p1x[idx*Ysize + idy] = numx/max(1.0, abs(numx)); 
-  p1y[idx*Ysize+idy] = numy/max(1.0,abs(numy));
+  float norm = sqrt( numx*numx + numy*numy);
+  p1x[idx*Ysize + idy] = numx/max(1.0,norm); 
+  p1y[idx*Ysize+idy] = numy/max(1.0,norm);
   __syncthreads();
+  float ux;
+  float uy;
 
-  int idx2 = (idx-1)*Ysize+idy;
-  int idx1 = (idx+1)*Ysize+idy;
-  int idy2 = idx*Ysize+(idy-1);
-  int idy1 = idx*Ysize+(idy+1);
-  if (idx == 0) {
-    idx2 = (idx+1)*Ysize+idy;
+  if ( idx == 0) {
+    ux = p1x[idx*Ysize + idy]; 
+  }  
+  if (idx == Xsize -1 ) {
+    ux = -p1x[(idx-1)*Ysize + idy];
   }
-  if (idy == 0) {
-    idy2 = idx*Ysize+(idy+1);
+  if (idy == 0){
+    uy = p1y[idx*Ysize + idy];
   }
-  if (idx == Xsize-1) {
-    idx1 = (idx-1)*Ysize+idy;
+  if (idy == Ysize-1){
+    uy = -p1y[idx*Ysize + idy-1];
   }
-  if (idy == Ysize-1) {
-    idy1 = idx*Ysize+(idy-1);
+  if (idx > 0 && idx < Xsize -1 && idy > 0 && idy < Ysize-1){
+    ux = p1x[idx*Ysize + idy] - p1x[(idx-1)*Ysize + idy];
+    uy = p1y[idx*Ysize + idy] - p1y[idx*Ysize + idy-1];
   }
-  if (idx < Xsize && idy < Ysize) {
-    float ux = (p1x[idx1] - p1x[idx2]);
-    float uy = (p1y[idy1] - p1y[idy2]);
-    div[idx*Ysize + idy] = -(ux+uy);
-  }   
+  div[idx*Ysize + idy] = ux + uy;
   p0x[idx*Ysize + idy] = p1x[idx*Ysize + idy];
   p0y[idx*Ysize + idy] = p1y[idx*Ysize + idy];
 
