@@ -283,8 +283,8 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
      gradx[idx*Ysize+idy] = (u[(idx+1)*Ysize + idy] - u[(idx-1)*Ysize + idy])/(2*h);
      grady[idx*Ysize+idy] = (u[idx*Ysize + idy+1] - u[idx*Ysize + idy - 1])/(2*h);  
   }
-  float numy = p0y[idx*Ysize+idy] + (tau/lambda)*grady[idx*Ysize+idy];
   float numx = p0x[idx*Ysize+idy] + (tau/lambda)*gradx[idx*Ysize+idy];
+  float numy = p0y[idx*Ysize+idy] + (tau/lambda)*grady[idx*Ysize+idy];
   p1x[idx*Ysize + idy] = numx/max(1.0, abs(numx)); 
   p1y[idx*Ysize+idy] = numy/max(1.0,abs(numy));
   __syncthreads();
@@ -317,16 +317,16 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
 
 int main(int argc, char * argv[] ) {
   long T ; // total variation 
-  float lambda; 
+  float lambda = 0.0628; 
   float mu = 0;
   float sigma;
-  float tau = 0.1;
+  float tau = 0.245;
   const char fname[] = "gs_owl.ppm";
   
   sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
-  sscanf(argv[2],"%f",&lambda);
-  sscanf(argv[3],"%f",&sigma);
+  //sscanf(argv[2],"%f",&lambda);
+  sscanf(argv[2],"%f",&sigma);
    
   // Load image from file
   RGBImage u0, unoise;
