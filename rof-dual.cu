@@ -343,6 +343,7 @@ __global__ void rof_smem(float* px, float* py, float* f, float* gradx, float* gr
     gradx[idx*Ysize+idy] = u[threadIdx.x+1][threadIdx.y]-u[threadIdx.x][threadIdx.y];
     grady[idx*Ysize+idy] = u[threadIdx.x][threadIdx.y+1]-u[threadIdx.x][threadIdx.y];  
   }
+  __syncthreads();
   if (idx < Xsize && idy < Ysize) {
     numx = px[idx*Ysize+idy] + (tau/lambda)*gradx[idx*Ysize+idy];
     numy = py[idx*Ysize+idy] + (tau/lambda)*grady[idx*Ysize+idy];
