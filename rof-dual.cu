@@ -490,10 +490,10 @@ __global__ void compute_u(float* u, float *f, float lambda, long Xsize, long Ysi
 }
 
 int main(int argc, char * argv[] ) {
-  long T = 500; // total variation 
-  float lambda = 15; 
+  long T = 100; // total variation 
+  float lambda = 10; 
   float mu = 0;
-  float sigma = 20;
+  float sigma = 50;
   float tau = 0.245;
   const char fname[] = "car.ppm";
   
