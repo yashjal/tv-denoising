@@ -11,12 +11,20 @@ struct RGBImage {
   float* A;
 };
 
-float norm_err(float* err,int Xsize,int Ysize) {
+float abs_err(float* err,int Xsize,int Ysize) {
   float ret_err = 0.0;
   for (int i=0; i< 3*Xsize*Ysize; i++) {
-    ret_err += err[i];
+    ret_err += abs(err[i]);
   }
   return ret_err/(3*Xsize*Ysize);
+}
+
+float rmse(float* err,int Xsize,int Ysize) {
+  float ret_err = 0.0;
+  for (int i=0; i< 3*Xsize*Ysize; i++) {
+    ret_err += (err[i]*err[i]);
+  }
+  return sqrt(ret_err)/(3*Xsize*Ysize);
 }
 
 float randn (float mu, float sigma) {
@@ -69,6 +77,7 @@ void read_image(const char* fname, RGBImage* I) {
   }
   fclose(f);
 }
+
 void write_image(const char* fname, const RGBImage I) {
   long N = I.Xsize * I.Ysize;
   if (!N) return;
@@ -94,14 +103,6 @@ void free_image(RGBImage* I) {
 
 #define BLOCK_DIM 32
 
-double norm(float *err, long Xsize, long Ysize) {
-  float sum = 0;
-  //#pragma omp parallel for reduction (+:sum)
-  for (long i = 0; i < Xsize*Ysize; i+=1) {
-     sum += err[i]*err[i];
-  }
-  return sqrt(sum);
-}
 
 __global__ void norm_upd(float* du, float* hf, float* u, float* f, float* err, float eps, float del, float h, long Xsize, long Ysize) {
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
@@ -424,7 +425,7 @@ __global__ void rof_gsmem(float* px, float* py, float* f, float lambda, float ta
   }
   if (idx < Xsize && idy < Ysize) {
     u[threadIdx.x+1][threadIdx.y+1] = f[idx*Ysize + idy] + lambda*div[idx*Ysize+idy];
-    err[idx*Ysize+idy] = abs(u[threadIdx.x+1][threadIdx.y+1] - u0[idx*Ysize+idy]);
+    err[idx*Ysize+idy] = u[threadIdx.x+1][threadIdx.y+1] - u0[idx*Ysize+idy];
   }
   __syncthreads();
   if (idx < Xsize-1 && idy < Ysize-1) {
@@ -625,7 +626,8 @@ int main(int argc, char * argv[] ) {
     rof_gsmem<<<gridDim,blockDim, 2, streams[2]>>>(p0xgpu+2*Xsize*Ysize, p0ygpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, lambda, tau, Xsize, Ysize, div+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, u0gpu+2*Xsize*Ysize);
     if (n%1 == 0 ) {
       cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float),cudaMemcpyDeviceToHost);
-      printf("iter: %d, mean absolute err: %f\n",n,norm_err(err,Xsize,Ysize));
+      printf("iter: %d, mean absolute err: %f\n",n,abs_err(err,Xsize,Ysize));
+      printf("iter: %d, root mean square  err: %f\n",n,rmse(err,Xsize,Ysize));
     }
   }
   compute_u<<<gridDim,blockDim, 0, streams[0]>>>(ugpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, lambda, Xsize, Ysize, div+0*Xsize*Ysize);

@@ -86,15 +86,23 @@ void free_image(RGBImage* I) {
 
 #define BLOCK_DIM 32
 
-double norm(float *err, long Xsize, long Ysize) {
+double abs_err(float *err, long Xsize, long Ysize) {
+  float sum = 0;
+  //#pragma omp parallel for reduction (+:sum)
+  for (long i = 0; i < Xsize*Ysize; i+=1) {
+     sum += abs(err[i]);
+  }
+  return sum/(3*Xsize*Ysize);
+}
+
+double rmse(float *err, long Xsize, long Ysize) {
   float sum = 0;
   //#pragma omp parallel for reduction (+:sum)
   for (long i = 0; i < Xsize*Ysize; i+=1) {
      sum += err[i]*err[i];
   }
-  return sqrt(sum);
+  return sqrt(sum)/(3*Xsize*Ysize);
 }
-
 __global__ void norm_upd(float* du, float* hf, float* u, float* f, float* err, float eps, float del, float h, long Xsize, long Ysize) {
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
@@ -282,7 +290,7 @@ int main(int argc, char * argv[] ) {
   float lambda; 
   float mu = 0;
   float sigma;
-  const char fname[] = "car.ppm";
+  const char fname[] = "gs_owl.ppm";
   
   sscanf(argv[1],"%d",&T);
   sscanf(argv[2],"%d",&N);
@@ -297,7 +305,7 @@ int main(int argc, char * argv[] ) {
   long Ysize = u0.Ysize;
   unoise.Xsize = Xsize;
   unoise.Ysize = Ysize;
-  float h = 1.0;
+  float h = 1.0/Xsize;
   unoise.A = (float*) malloc(3*Xsize*Ysize*sizeof(float));  
   
   for(int c = 0; c < 3; c++){
@@ -309,7 +317,7 @@ int main(int argc, char * argv[] ) {
   }
 
   
-  write_image("car_noise.ppm",unoise);
+  write_image("noise.ppm",unoise);
  
   //char sigma_buf[10];
   //char T_buf[10];
@@ -385,7 +393,7 @@ int main(int argc, char * argv[] ) {
   cudaMemcpy(u0.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("car_nsmem.ppm", u0);
+  write_image("nsmem.ppm", u0);
 
   cudaDeviceSynchronize();
  
@@ -417,7 +425,7 @@ int main(int argc, char * argv[] ) {
   printf("GPU time = %fs\n", tt);
   cudaMemcpy(u0.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-   write_image("car_smem.ppm", u0);
+   write_image("smem.ppm", u0);
 
   // Free memory
   cudaStreamDestroy(streams[0]);
