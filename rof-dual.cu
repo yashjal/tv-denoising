@@ -491,7 +491,7 @@ __global__ void compute_u(float* u, float *f, float lambda, long Xsize, long Ysi
 
 int main(int argc, char * argv[] ) {
   long T = 500; // total variation 
-  float lambda = 10; 
+  float lambda = 20; 
   float mu = 0;
   float sigma = 50;
   float tau = 0.245;
