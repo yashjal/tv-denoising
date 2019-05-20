@@ -385,6 +385,7 @@ __global__ void rof_smem(float* px, float* py, float* f, float* gradx, float* gr
   if (idy > 0 && idy < Ysize -1) {
     uy = pysh[threadIdx.x+1][threadIdx.y+1]-pysh[threadIdx.x+1][threadIdx.y]; //p1y[idx*Ysize + idy] - p1y[idx*Ysize + idy-1];
   }
+  __syncthreads();
   if (idx < Xsize && idy < Ysize) {
     div[idx*Ysize + idy] = ux + uy;
     px[idx*Ysize + idy] = pxsh[threadIdx.x+1][threadIdx.y+1]; //p1x[idx*Ysize + idy];
