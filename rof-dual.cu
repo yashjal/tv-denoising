@@ -510,7 +510,7 @@ int main(int argc, char * argv[] ) {
   long Ysize = u0.Ysize;
   unoise.Xsize = Xsize;
   unoise.Ysize = Ysize;
-  //float h = 1.0/Xsize;
+  float h = 1.0;
   unoise.A = (float*) malloc(3*Xsize*Ysize*sizeof(float));  
   
   for(int c = 0; c < 3; c++){
@@ -562,7 +562,7 @@ int main(int argc, char * argv[] ) {
   //printf("before kernel\n");
   // denoise on GPU
 
-  /*
+  
   cudaDeviceSynchronize();
   t.tic();
   for (long n = 0; n < T; n++) {
@@ -587,7 +587,7 @@ int main(int argc, char * argv[] ) {
  
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
   write_image("car_nsmem.ppm", u0);
- */
+ 
 
 /*  cudaDeviceSynchronize();
   t.tic();
@@ -606,6 +606,7 @@ int main(int argc, char * argv[] ) {
   printf("GPU time = %fs\n", tt);
   */
 
+/*
   cudaDeviceSynchronize();
   t.tic();
   for (long n = 0; n < T; n++) {
@@ -621,7 +622,7 @@ int main(int argc, char * argv[] ) {
   cudaDeviceSynchronize();
   double tt = t.toc();
   printf("GPU time = %fs\n", tt);
-
+*/
   // Print error
   /*
   float err = 0;
@@ -632,10 +633,10 @@ int main(int argc, char * argv[] ) {
 
   // Write output
   // write_image("CPU.ppm", I1_ref);
-  cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  //cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
 
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("car_smem2.ppm", u0);
+  //write_image("car_smem2.ppm", u0);
 
 
   /*
