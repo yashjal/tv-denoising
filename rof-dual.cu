@@ -329,10 +329,10 @@ __global__ void rof_smem(float* px, float* py, float* f, float* gradx, float* gr
   __shared__ float pysh[BLOCK_DIM+1][BLOCK_DIM+1];
   float numx, numy, norm;
  
-  if(blockIdx.x < Xsize/BLOCK_DIM && threadIdx.x == BLOCK_DIM -1){
+  if(blockIdx.x < Xsize/BLOCK_DIM+1 && threadIdx.x == BLOCK_DIM -1){
     u[BLOCK_DIM][threadIdx.y] = f[(idx+1)*Ysize + idy] + lambda*div[(idx+1)*Ysize+idy];
   }
-  if(blockIdx.y < Ysize/BLOCK_DIM && threadIdx.y == BLOCK_DIM -1){
+  if(blockIdx.y < Ysize/BLOCK_DIM+1 && threadIdx.y == BLOCK_DIM -1){
     u[threadIdx.x][BLOCK_DIM] = f[idx*Ysize + idy + 1] + lambda*div[idx*Ysize+idy+1];;
   }
   if (idx < Xsize && idy < Ysize) {
@@ -351,7 +351,6 @@ __global__ void rof_smem(float* px, float* py, float* f, float* gradx, float* gr
     pxsh[threadIdx.x+1][threadIdx.y+1] = numx/max(1.0,norm);
     pysh[threadIdx.x+1][threadIdx.y+1] = numy/max(1.0,norm);
   }
-  __syncthreads();
   if(blockIdx.x > 0 && threadIdx.x == 0 ){
     numx = px[(idx-1)*Ysize+idy] + (tau/lambda)*gradx[(idx-1)*Ysize+idy];
     numy = py[(idx-1)*Ysize+idy] + (tau/lambda)*grady[(idx-1)*Ysize+idy];
@@ -359,7 +358,6 @@ __global__ void rof_smem(float* px, float* py, float* f, float* gradx, float* gr
     pxsh[0][threadIdx.y+1] = numx/max(1.0,norm);;
     pysh[0][threadIdx.y+1] = numy/max(1.0,norm);;
   }
-  __syncthreads();
   if(blockIdx.y > 0 && threadIdx.y == 0){
     numx = px[idx*Ysize+idy-1] + (tau/lambda)*gradx[idx*Ysize+idy-1];
     numy = py[idx*Ysize+idy-1] + (tau/lambda)*grady[idx*Ysize+idy-1];
@@ -394,7 +392,6 @@ __global__ void rof_smem(float* px, float* py, float* f, float* gradx, float* gr
     px[idx*Ysize + idy] = pxsh[threadIdx.x+1][threadIdx.y+1]; //p1x[idx*Ysize + idy];
     py[idx*Ysize + idy] = pysh[threadIdx.x+1][threadIdx.y+1]; //p1y[idx*Ysize + idy];
   }
-  __syncthreads();
 }
 
 __global__ void rof_gsmem(float* px, float* py, float* f, float lambda, float tau, long Xsize, long Ysize, float* div){
