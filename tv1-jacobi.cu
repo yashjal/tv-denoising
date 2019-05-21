@@ -282,7 +282,7 @@ int main(int argc, char * argv[] ) {
   float lambda = 0.5; 
   float mu = 0;
   float sigma = 50;
-  const char fname[] = "bike.ppm";
+  const char fname[] = "car.ppm";
   
   //sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);

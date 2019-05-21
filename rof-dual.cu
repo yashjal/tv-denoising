@@ -497,7 +497,7 @@ int main(int argc, char * argv[] ) {
   float mu = 0;
   float sigma = 50;
   float tau = 0.245;
-  const char fname[] = "bike.ppm";
+  const char fname[] = "car.ppm";
   
   //sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
@@ -588,7 +588,7 @@ int main(int argc, char * argv[] ) {
   cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("nsmem.ppm", u0);
+  write_image("rof-nsmem.ppm", u0);
  
 /*
   cudaDeviceSynchronize();
