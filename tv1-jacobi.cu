@@ -275,19 +275,19 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 
 
 int main(int argc, char * argv[] ) {
-  long T ; // total variation 
-  long N ; // jacobi
+  long T = 20; // total variation 
+  long N = 20; // jacobi
   float eps = 1e-4;
   float del = 1e-4;
-  float lambda; 
+  float lambda = 0.5; 
   float mu = 0;
-  float sigma;
+  float sigma = 50;
   const char fname[] = "car.ppm";
   
-  sscanf(argv[1],"%d",&T);
-  sscanf(argv[2],"%d",&N);
-  sscanf(argv[3],"%f",&lambda);
-  sscanf(argv[4],"%f",&sigma);
+  //sscanf(argv[1],"%d",&T);
+  //sscanf(argv[2],"%d",&N);
+  //sscanf(argv[3],"%f",&lambda);
+  //sscanf(argv[4],"%f",&sigma);
    
   // Load image from file
   RGBImage u0, unoise;
@@ -309,7 +309,7 @@ int main(int argc, char * argv[] ) {
   }
 
   
-  write_image("car_noise.ppm",unoise);
+  write_image("noise.ppm",unoise);
  
   //char sigma_buf[10];
   //char T_buf[10];
@@ -370,7 +370,7 @@ int main(int argc, char * argv[] ) {
   }
   cudaDeviceSynchronize();
   double tt = t.toc();
-  printf("GPU time = %fs\n", tt);
+  printf("non-smem GPU time = %fs\n", tt);
 
   // Print error
   /*
@@ -385,11 +385,12 @@ int main(int argc, char * argv[] ) {
   cudaMemcpy(u0.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("car_nsmem.ppm", u0);
+  write_image("nsmem.ppm", u0);
 
   cudaDeviceSynchronize();
  
   t.tic();
+  //for (int rep = 0; rep < 50; rep++) {  
   for (long n = 0; n < T; n++) {
     norm_upd_smem<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0smem+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
     norm_upd_smem<<<gridDim,blockDim, 1, streams[1]>>>(dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, u0smem+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, eps, del, h, Xsize, Ysize);
@@ -412,12 +413,13 @@ int main(int argc, char * argv[] ) {
 
     }
   }
+  //}
   cudaDeviceSynchronize();
   tt = t.toc();
-  printf("GPU time = %fs\n", tt);
+  printf("smem GPU time = %fs\n", tt);
   cudaMemcpy(u0.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
- // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-   write_image("car_smem.ppm", u0);
+  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  write_image("smem.ppm", u0);
 
   // Free memory
   cudaStreamDestroy(streams[0]);
