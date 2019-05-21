@@ -497,7 +497,7 @@ int main(int argc, char * argv[] ) {
   float mu = 0;
   float sigma = 50;
   float tau = 0.245;
-  const char fname[] = "car.ppm";
+  const char fname[] = "bike.ppm";
   
   //sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
@@ -524,7 +524,7 @@ int main(int argc, char * argv[] ) {
   }
 
   
-  write_image("car_noise.ppm",unoise);
+  write_image("noise.ppm",unoise);
  
   //char sigma_buf[10];
   //char T_buf[10];
