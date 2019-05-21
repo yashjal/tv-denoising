@@ -497,7 +497,7 @@ int main(int argc, char * argv[] ) {
   float mu = 0;
   float sigma = 50;
   float tau = 0.245;
-  const char fname[] = "car.ppm";
+  const char fname[] = "bike.ppm";
   
   //sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
@@ -524,7 +524,7 @@ int main(int argc, char * argv[] ) {
   }
 
   
-  write_image("noise.ppm",unoise);
+  //write_image("noise.ppm",unoise);
  
   //char sigma_buf[10];
   //char T_buf[10];
@@ -567,6 +567,7 @@ int main(int argc, char * argv[] ) {
  
   cudaDeviceSynchronize();
   t.tic();
+  for (int rep=0; rep < 50; rep++) {
   for (long n = 0; n < T; n++) {
     rof<<<gridDim,blockDim, 0, streams[0]>>>(ugpu+0*Xsize*Ysize, p0xgpu+0*Xsize*Ysize, p1xgpu+0*Xsize*Ysize, p0ygpu+0*Xsize*Ysize, p1ygpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, gradx+0*Xsize*Ysize, grady+0*Xsize*Ysize, lambda, tau, Xsize, Ysize, h, div+0*Xsize*Ysize);
     rof<<<gridDim,blockDim, 1, streams[1]>>>(ugpu+1*Xsize*Ysize, p0xgpu+1*Xsize*Ysize, p1xgpu+1*Xsize*Ysize, p0ygpu+1*Xsize*Ysize, p1ygpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, gradx+1*Xsize*Ysize, grady+1*Xsize*Ysize, lambda, tau, Xsize, Ysize, h, div+1*Xsize*Ysize);
@@ -578,9 +579,10 @@ int main(int argc, char * argv[] ) {
     //printf("TV iters: %d, err: %f\n", n, norm_err); 
     
   }
+  }
   cudaDeviceSynchronize();
   double tt = t.toc();
-  printf("GPU time = %fs\n", tt);
+  printf("GPU time = %fs\n", tt/50);
 
 
   // Write output
@@ -588,7 +590,7 @@ int main(int argc, char * argv[] ) {
   cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
   // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  write_image("rof-nsmem.ppm", u0);
+  //write_image("rof-nsmem.ppm", u0);
  
 /*
   cudaDeviceSynchronize();
