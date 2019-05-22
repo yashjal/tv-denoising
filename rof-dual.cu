@@ -11,6 +11,9 @@ struct RGBImage {
   float* A;
 };
 
+/*
+ sample from normal dist
+*/
 float randn (float mu, float sigma) {
   float U1, U2, W, mult;
   static float X1, X2;
@@ -61,6 +64,7 @@ void read_image(const char* fname, RGBImage* I) {
   }
   fclose(f);
 }
+
 void write_image(const char* fname, const RGBImage I) {
   long N = I.Xsize * I.Ysize;
   if (!N) return;
@@ -78,6 +82,7 @@ void write_image(const char* fname, const RGBImage I) {
   free(I0);
   fclose(f);
 }
+
 void free_image(RGBImage* I) {
   long N = I->Xsize * I->Ysize;
   if (N) free(I->A);
@@ -86,204 +91,23 @@ void free_image(RGBImage* I) {
 
 #define BLOCK_DIM 32
 
-double norm(float *err, long Xsize, long Ysize) {
-  float sum = 0;
-  //#pragma omp parallel for reduction (+:sum)
-  for (long i = 0; i < Xsize*Ysize; i+=1) {
-     sum += err[i]*err[i];
-  }
-  return sqrt(sum);
-}
-
-__global__ void norm_upd(float* du, float* hf, float* u, float* f, float* err, float eps, float del, float h, long Xsize, long Ysize) {
-  int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
-  int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
-  
-  int idx2 = (idx-1)*Ysize+idy;
-  int idx1 = (idx+1)*Ysize+idy;
-  int idy2 = idx*Ysize+(idy-1);
-  int idy1 = idx*Ysize+(idy+1);
-  if (idx == 0) {
-    idx2 = (idx+1)*Ysize+idy;
-  }
-  if (idy == 0) {
-    idy2 = idx*Ysize+(idy+1);
-  }
-  if (idx == Xsize-1) {
-    idx1 = (idx-1)*Ysize+idy;
-  }
-  if (idy == Ysize-1) {
-    idy1 = idx*Ysize+(idy-1);
-  }
-
-  if (idx < Xsize && idy < Ysize) {
-    float ux = (u[idx1] - u[idx2])/(2*h);
-    float uy = (u[idy1] - u[idy2])/(2*h);
-    du[idx*Ysize+idy] = sqrt(ux*ux + uy*uy + eps);
-  } 
-  float uf = u[idx*Ysize+idy]-f[idx*Ysize+idy];
-  hf[idx*Ysize+idy] = sqrt(uf*uf + del);
-  
- // __syncthreads();
- 
- // err[idx*Ysize+idy] = du[idx*Ysize+idy] + hf[idx*Ysize+idy];
-}
-
-__global__ void GPU_jacobi(float* u0, float* u1, float *f, float* err, long Xsize, long Ysize, float h, float* du, float* hf, float lambda) {
-  int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
-  int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
- 
-  int idx2 = (idx-1)*Ysize+idy;
-  int idx1 = (idx+1)*Ysize+idy;
-  int idy2 = idx*Ysize+(idy-1);
-  int idy1 = idx*Ysize+(idy+1);
-  if (idx == 0) {
-    idx2 = (idx+1)*Ysize+idy;
-  }
-  if (idy == 0) {
-    idy2 = idx*Ysize+(idy+1);
-  }
-  if (idx == Xsize-1) {
-    idx1 = (idx-1)*Ysize+idy;
-  }
-  if (idy == Ysize-1) {
-    idy1 = idx*Ysize+(idy-1);
-  }
-  if (idx < Xsize && idy < Ysize) {
-    u1[idx*Ysize+idy] = ((u0[idx1] + u0[idy1] + u0[idx2] + u0[idy2])/(du[idx*Ysize+idy])+ h*h*lambda*f[idx*Ysize+idy]/hf[idx*Ysize+idy]) / (4/du[idx*Ysize+idy] + h*h*lambda/hf[idx*Ysize+idy]);
-  }
- 
-  __syncthreads();
-  if (idx < Xsize && idy < Ysize) {
-    u0[idx*Ysize+idy] = u1[idx*Ysize+idy];
-  }
-  
-  /*__syncthreads();
-  if (idx > 0 && idx < Xsize-1 && idy > 0 && idy < Ysize-1) {
-    err[idx*Ysize+idy] = (-u0[(idx-1)*Ysize+idy] - u0[idx*Ysize+(idy-1)] + 4*u0[idx*Ysize+idy] - u0[(idx+1)*Ysize+idy] - u0[idx*Ysize+(idy+1)])/(h*h)/du[idx*Ysize+idy] + lambda*(u0[idx*Ysize+idy]-f[idx*Ysize+idy])/hf[idx*Ysize+idy];
-  }*/
-}
-
-__global__ void norm_upd_smem(float* du, float* hf, float* u, float* f, float* err, float eps, float del, float h, long Xsize, long Ysize) {
-  int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
-  int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
-  __shared__ float su[BLOCK_DIM+2][BLOCK_DIM+2];
-  //__shared__ float sf[BLOCK_DIM+1][BLOCK_DIM+1];
-
-  int idx2 = (idx-1)*Ysize+idy;
-  int idx1 = (idx+1)*Ysize+idy;
-  int idy2 = idx*Ysize+(idy-1);
-  int idy1 = idx*Ysize+(idy+1);
-  if (idx == 0) {
-    idx2 = (idx+1)*Ysize+idy;
-  }
-  if (idy == 0) {
-    idy2 = idx*Ysize+(idy+1);
-  }
-  if (idx == Xsize-1) {
-    idx1 = (idx-1)*Ysize+idy;
-  }
-  if (idy == Ysize-1) {
-    idy1 = idx*Ysize+(idy-1);
-  }
- 
-  if (blockIdx.x > 0 && threadIdx.x == 0){
-    su[0][threadIdx.y+1] = u[idx2]; //u[((blockIdx.x - 1) *BLOCK_DIM + BLOCK_DIM - 1)*Ysize + idy];
-  }
-  if (blockIdx.y > 0 && threadIdx.y == 0){
-    su[threadIdx.x + 1][0] = u[idy2];//u[idx*Ysize + (blockIdx.y-1)*BLOCK_DIM + BLOCK_DIM - 1 ];
-  }
-  if(blockIdx.x < Xsize/BLOCK_DIM && threadIdx.x == BLOCK_DIM -1){
-    su[BLOCK_DIM + 1][threadIdx.y+1] = u[idx1];//u0[(blockIdx.x+1)*BLOCK_DIM + idy];
-  }
-  if(blockIdx.y < Ysize/BLOCK_DIM && threadIdx.y == BLOCK_DIM -1){
-    su[threadIdx.x+1][BLOCK_DIM+1] = u[idy1];//u0[idx*Ysize + (blockIdx.y + 1)*BLOCK_DIM];
-  }
-  su[threadIdx.x+1][threadIdx.y+1] = u[idx*Ysize+idy];
-  //sf[threadIdx.x+1][threadIdx.y+1] = f[idx*Ysize+idy];
-  __syncthreads();
-
-  if (idx < Xsize && idy < Ysize) {
-    float ux = (su[threadIdx.x+2][threadIdx.y+1] -su[threadIdx.x][threadIdx.y+1])/(2*h);
-    float uy = (su[threadIdx.x+1][threadIdx.y+2] -su[threadIdx.x+1][threadIdx.y])/(2*h);
-    du[idx*Ysize+idy] = sqrt(ux*ux + uy*uy + eps);
-    float uf = su[threadIdx.x + 1][threadIdx.y+1]- f[idx*Ysize+idy];
-    hf[idx*Ysize+idy] = sqrt(uf*uf + del);
-  }
-  
-  //__syncthreads(); 
- 
-  //err[idx*Ysize+idy] = du[idx*Ysize+idy] + hf[idx*Ysize+idy];
-}
-
-__global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, long Ysize, float h, float* du, float* hf, float lambda) {
-  int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
-  int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
-  __shared__ float su0[BLOCK_DIM+2][BLOCK_DIM+2];
-  __shared__ float su1[BLOCK_DIM+2][BLOCK_DIM+2];
-
-  int idx2 = (idx-1)*Ysize+idy;
-  int idx1 = (idx+1)*Ysize+idy;
-  int idy2 = idx*Ysize+(idy-1);
-  int idy1 = idx*Ysize+(idy+1);
-  if (idx == 0) {
-    idx2 = (idx+1)*Ysize+idy;
-  }
-  if (idy == 0) {
-    idy2 = idx*Ysize+(idy+1);
-  }
-  if (idx == Xsize-1) {
-    idx1 = (idx-1)*Ysize+idy;
-  } 
-  if (idy == Ysize-1) {
-    idy1 = idx*Ysize+(idy-1);
-  }
-
-  if(blockIdx.x > 0 && threadIdx.x == 0 ){
-    su0[0][threadIdx.y+1] = u0[idx2];
-  }
-  if(blockIdx.y > 0 && threadIdx.y == 0){
-    su0[threadIdx.x+1][0] = u0[idy2];
-  }
-  if(blockIdx.x < Xsize/BLOCK_DIM && threadIdx.x == BLOCK_DIM -1){
-    su0[BLOCK_DIM + 1][threadIdx.y+1] = u0[idx1];//u0[(blockIdx.x+1)*BLOCK_DIM + idy];
-  }
-  if(blockIdx.y < Ysize/BLOCK_DIM && threadIdx.y == BLOCK_DIM -1){
-    su0[threadIdx.x+1][BLOCK_DIM+1] = u0[idy1];//u0[idx*Ysize + (blockIdx.y + 1)*BLOCK_DIM];
-  } 
-  su0[threadIdx.x+1][threadIdx.y+1] = u0[idx*Ysize + idy];
-  __syncthreads();
-
-
-  if (idx < Xsize && idy < Ysize) {
-    float ldu = du[idx*Ysize + idy];
-    float lhf = hf[idx*Ysize + idy]; 
-    su1[threadIdx.x+1][threadIdx.y+1] = ((su0[threadIdx.x+2][threadIdx.y+1] + su0[threadIdx.x+1][threadIdx.y+2] + su0[threadIdx.x][threadIdx.y+1] + su0[threadIdx.x+1][threadIdx.y])/ldu + h*h*lambda*f[idx*Ysize+idy]/lhf) / (4/ldu + h*h*lambda/lhf);
-  }
-  
-  __syncthreads();
-   if (idx < Xsize && idy < Ysize){ 
-     u0[idx*Ysize+idy] = su1[threadIdx.x+1][threadIdx.y+1];
-   }
-  /*
-  __syncthreads();
-
-  if (idx > 0 && idx < Xsize-1 && idy > 0 && idy < Ysize-1) {
-    err[idx*Ysize+idy] = (-u0[(idx-1)*Ysize+idy] - u0[idx*Ysize+(idy-1)] + 4*u0[idx*Ysize+idy] - u0[(idx+1)*Ysize+idy] - u0[idx*Ysize+(idy+1)])/(h*h)/du[idx*Ysize+idy] + lambda*(u0[idx*Ysize+idy]-f[idx*Ysize+idy])/hf[idx*Ysize+idy];
-  }*/
-}
-
+/*
+ROF-dual kernel without using shared memory
+*/
 __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, float* f, float* gradx, float* grady,  float lambda, float tau, long Xsize, long Ysize, float h, float* div){
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
+  // u = f + lambda div(p)
   if (idx < Xsize && idy < Ysize) {
     u[idx*Ysize + idy] = f[idx*Ysize + idy] + lambda*div[idx*Ysize+idy];
   }
   __syncthreads();
+  // gradient of u
   if (idx < Xsize-1 && idy < Ysize-1) {
     gradx[idx*Ysize+idy] = (u[(idx+1)*Ysize + idy] - u[idx*Ysize + idy]);
     grady[idx*Ysize+idy] = (u[idx*Ysize + idy+1] - u[idx*Ysize + idy]);  
   }
+  // gradient descent step
   if (idx < Xsize && idy < Ysize) {
     float numx = p0x[idx*Ysize+idy] + (tau/lambda)*gradx[idx*Ysize+idy];
     float numy = p0y[idx*Ysize+idy] + (tau/lambda)*grady[idx*Ysize+idy];
@@ -294,6 +118,7 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
   __syncthreads();
   float ux;
   float uy;
+  // derivatives of p for boundaries
   if ( idx == 0) {
     ux = p1x[idx*Ysize + idy];
   }  
@@ -306,12 +131,14 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
   if (idy == Ysize-1){
     uy = -p1y[idx*Ysize + idy-1];
   }
+  // derivatives of p for non-boundaries
   if (idx > 0 && idx < Xsize -1) {
     ux = p1x[idx*Ysize + idy] - p1x[(idx-1)*Ysize + idy];
   }
   if (idy > 0 && idy < Ysize -1) {
     uy = p1y[idx*Ysize + idy] - p1y[idx*Ysize + idy-1];
   }
+  // div p
   if (idx < Xsize && idy < Ysize) {
     div[idx*Ysize + idy] = ux + uy;
     p0x[idx*Ysize + idy] = p1x[idx*Ysize + idy];
@@ -319,11 +146,13 @@ __global__ void rof(float* u, float* p0x, float* p1x, float* p0y, float* p1y, fl
   }
 }
 
+/*
+ROF-dual with shared memory without shared mem for gradx, grady 
+*/
+/*
 __global__ void rof_smem(float* px, float* py, float* f, float* gradx, float* grady, float lambda, float tau, long Xsize, long Ysize, float* div){
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
-  //__shared__ float gradx[BLOCK_DIM][BLOCK_DIM];
-  //__shared__ float grady[BLOCK_DIM][BLOCK_DIM];
   __shared__ float u[BLOCK_DIM+1][BLOCK_DIM+1];
   __shared__ float pxsh[BLOCK_DIM+1][BLOCK_DIM+1];
   __shared__ float pysh[BLOCK_DIM+1][BLOCK_DIM+1];
@@ -393,17 +222,22 @@ __global__ void rof_smem(float* px, float* py, float* f, float* gradx, float* gr
     py[idx*Ysize + idy] = pysh[threadIdx.x+1][threadIdx.y+1]; //p1y[idx*Ysize + idy];
   }
 }
+*/
 
+/*
+ROF-dual with shared mem for gradx, grady
+*/
 __global__ void rof_gsmem(float* px, float* py, float* f, float lambda, float tau, long Xsize, long Ysize, float* div){
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
-  __shared__ float gradx[BLOCK_DIM+1][BLOCK_DIM+1];
-  __shared__ float grady[BLOCK_DIM+1][BLOCK_DIM+1];
+  __shared__ float gradx[BLOCK_DIM+1][BLOCK_DIM+1]; // gradient of u in x direction
+  __shared__ float grady[BLOCK_DIM+1][BLOCK_DIM+1]; // gradient of u in y direction
   __shared__ float u[BLOCK_DIM+2][BLOCK_DIM+2];
-  __shared__ float pxsh[BLOCK_DIM+1][BLOCK_DIM+1];
-  __shared__ float pysh[BLOCK_DIM+1][BLOCK_DIM+1];
+  __shared__ float pxsh[BLOCK_DIM+1][BLOCK_DIM+1]; // x coordinate of vector p
+  __shared__ float pysh[BLOCK_DIM+1][BLOCK_DIM+1]; // y coordinate of vector p
   float numx, numy, norm;
- 
+
+  // u = f + lambda div p for ghost cells of shared mem block 
   if(blockIdx.x < Xsize/BLOCK_DIM && threadIdx.x == BLOCK_DIM -1){
     u[BLOCK_DIM+1][threadIdx.y+1] = f[(idx+1)*Ysize + idy] + lambda*div[(idx+1)*Ysize+idy];
   }
@@ -416,14 +250,20 @@ __global__ void rof_gsmem(float* px, float* py, float* f, float lambda, float ta
   if(blockIdx.y > 0 && threadIdx.y == 0){
     u[threadIdx.x+1][0] = f[idx*Ysize + idy-1] + lambda*div[idx*Ysize + idy-1];
   }
+
+  // u = f + lambda div p
   if (idx < Xsize && idy < Ysize) {
     u[threadIdx.x+1][threadIdx.y+1] = f[idx*Ysize + idy] + lambda*div[idx*Ysize+idy];
   }
   __syncthreads();
+  
+  // one-sided difference gradient of u
   if (idx < Xsize-1 && idy < Ysize-1) {
     gradx[threadIdx.x+1][threadIdx.y+1] = u[threadIdx.x+2][threadIdx.y+1]-u[threadIdx.x+1][threadIdx.y+1];
     grady[threadIdx.x+1][threadIdx.y+1] = u[threadIdx.x+1][threadIdx.y+2]-u[threadIdx.x+1][threadIdx.y+1];  
   }
+
+  // gradient values for ghost cells
   if (blockIdx.x>0 && threadIdx.x == 0){ 
     gradx[0][threadIdx.y+1] = u[1][threadIdx.y+1]-u[0][threadIdx.y+1];
     grady[0][threadIdx.y+1] = u[0][threadIdx.y+2]-u[0][threadIdx.y+1];
@@ -433,13 +273,16 @@ __global__ void rof_gsmem(float* px, float* py, float* f, float lambda, float ta
     grady[threadIdx.x+1][0] = u[threadIdx.x+1][1] - u[threadIdx.x+1][0];
   } 
   __syncthreads();
+
+  // gradient descent step
   if (idx < Xsize && idy < Ysize) {
     numx = px[idx*Ysize+idy] + (tau/lambda)*gradx[threadIdx.x+1][threadIdx.y+1];
     numy = py[idx*Ysize+idy] + (tau/lambda)*grady[threadIdx.x+1][threadIdx.y+1];
     norm = sqrt( numx*numx + numy*numy);
     pxsh[threadIdx.x+1][threadIdx.y+1] = numx/max(1.0,norm);
     pysh[threadIdx.x+1][threadIdx.y+1] = numy/max(1.0,norm);
-  } 
+  }
+  // gradient descent step for ghost cells 
   if(blockIdx.x > 0 && threadIdx.x == 0 ){
     numx = px[(idx-1)*Ysize+idy] + (tau/lambda)*gradx[0][threadIdx.y+1];
     numy = py[(idx-1)*Ysize+idy] + (tau/lambda)*grady[0][threadIdx.y+1];
@@ -457,6 +300,7 @@ __global__ void rof_gsmem(float* px, float* py, float* f, float lambda, float ta
   __syncthreads();
   float ux;
   float uy;
+  // divergence values ux, uy (derivatives of p) for boundaries
   if ( idx == 0) {
     ux = pxsh[threadIdx.x+1][threadIdx.y+1]; //p1x[idx*Ysize + idy];
   }  
@@ -469,12 +313,14 @@ __global__ void rof_gsmem(float* px, float* py, float* f, float lambda, float ta
   if (idy == Ysize-1){
     uy = -pysh[threadIdx.x+1][threadIdx.y]; //-p1y[idx*Ysize + idy-1];
   }
+  // div p at inner grid points
   if (idx > 0 && idx < Xsize -1) {
     ux = pxsh[threadIdx.x+1][threadIdx.y+1]-pxsh[threadIdx.x][threadIdx.y+1];// p1x[idx*Ysize + idy] - p1x[(idx-1)*Ysize + idy];
   }
   if (idy > 0 && idy < Ysize -1) {
     uy = pysh[threadIdx.x+1][threadIdx.y+1]-pysh[threadIdx.x+1][threadIdx.y]; //p1y[idx*Ysize + idy] - p1y[idx*Ysize + idy-1];
   }
+  // divergence of p
   if (idx < Xsize && idy < Ysize) {
     div[idx*Ysize + idy] = ux + uy;
     px[idx*Ysize + idy] = pxsh[threadIdx.x+1][threadIdx.y+1]; //p1x[idx*Ysize + idy];
@@ -482,7 +328,9 @@ __global__ void rof_gsmem(float* px, float* py, float* f, float lambda, float ta
   }
 }
 
-
+/*
+u = f + \lambda div p
+*/
 __global__ void compute_u(float* u, float *f, float lambda, long Xsize, long Ysize, float* div){
   int idx = (blockIdx.x)*BLOCK_DIM + threadIdx.x;
   int idy = (blockIdx.y)*BLOCK_DIM + threadIdx.y;
@@ -492,12 +340,12 @@ __global__ void compute_u(float* u, float *f, float lambda, long Xsize, long Ysi
 }
 
 int main(int argc, char * argv[] ) {
-  long T = 250; // total variation 
+  long T = 250; 
   float lambda = 50; 
   float mu = 0;
   float sigma = 50;
   float tau = 0.245;
-  const char fname[] = "bike.ppm";
+  const char fname[] = "car.ppm";
   
   //sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
@@ -514,7 +362,8 @@ int main(int argc, char * argv[] ) {
   unoise.Ysize = Ysize;
   float h = 1.0;
   unoise.A = (float*) malloc(3*Xsize*Ysize*sizeof(float));  
-  
+ 
+  // add noise to clean image 
   for(int c = 0; c < 3; c++){
     for(int i = 0; i < Xsize; i++){
       for(int j = 0; j < Ysize; j++) {
@@ -523,20 +372,12 @@ int main(int argc, char * argv[] ) {
     }
   }
 
-  
-  //write_image("noise.ppm",unoise);
+  // write noisy image
+  write_image("rof-noise.ppm",unoise);
  
-  //char sigma_buf[10];
-  //char T_buf[10];
-  //char lam_buf[10];
-  //gcvt(sigma,2,sigma_buf);
-  //gcvt(lambda,2,lam_buf);
-  //gcvt((float)T,3,T_buf);
-
   Timer t;
   // Allocate GPU memory
   float *ugpu, *fgpu, *p1xgpu, *p1ygpu, *p0xgpu, *p0ygpu, *gradx, *grady, *div;
-  //cudaMalloc(&usmem, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&ugpu, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&fgpu, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&p1xgpu, 3*Xsize*Ysize*sizeof(float));
@@ -547,11 +388,9 @@ int main(int argc, char * argv[] ) {
   cudaMalloc(&grady, 3*Xsize*Ysize*sizeof(float));
   cudaMalloc(&div, 3*Xsize*Ysize*sizeof(float));
 
-  //err = (float*)malloc(3*Xsize*Ysize*sizeof(float));
  
   cudaMemcpy(ugpu, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(fgpu, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
-  //cudaMemcpy(usmem, unoise.A, 3*Xsize*Ysize*sizeof(float), cudaMemcpyHostToDevice);
 
   // Create streams
   cudaStream_t streams[3];
@@ -561,36 +400,26 @@ int main(int argc, char * argv[] ) {
 
   dim3 blockDim(BLOCK_DIM, BLOCK_DIM);
   dim3 gridDim(Xsize/BLOCK_DIM+1, Ysize/BLOCK_DIM+1);
-  //printf("before kernel\n");
-  // denoise on GPU
-
+  
  
   cudaDeviceSynchronize();
   t.tic();
-  for (int rep=0; rep < 50; rep++) {
+
   for (long n = 0; n < T; n++) {
     rof<<<gridDim,blockDim, 0, streams[0]>>>(ugpu+0*Xsize*Ysize, p0xgpu+0*Xsize*Ysize, p1xgpu+0*Xsize*Ysize, p0ygpu+0*Xsize*Ysize, p1ygpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, gradx+0*Xsize*Ysize, grady+0*Xsize*Ysize, lambda, tau, Xsize, Ysize, h, div+0*Xsize*Ysize);
     rof<<<gridDim,blockDim, 1, streams[1]>>>(ugpu+1*Xsize*Ysize, p0xgpu+1*Xsize*Ysize, p1xgpu+1*Xsize*Ysize, p0ygpu+1*Xsize*Ysize, p1ygpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, gradx+1*Xsize*Ysize, grady+1*Xsize*Ysize, lambda, tau, Xsize, Ysize, h, div+1*Xsize*Ysize);
     rof<<<gridDim,blockDim, 2, streams[2]>>>(ugpu+2*Xsize*Ysize, p0xgpu+2*Xsize*Ysize, p1xgpu+2*Xsize*Ysize, p0ygpu+2*Xsize*Ysize, p1ygpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, gradx+2*Xsize*Ysize, grady+2*Xsize*Ysize, lambda, tau, Xsize, Ysize, h, div+2*Xsize*Ysize);
 
-    //cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);cudaFree(p0xgpu);
+  }
 
-    //float norm_err = norm(err,Xsize,Ysize);
-    //printf("TV iters: %d, err: %f\n", n, norm_err); 
-    
-  }
-  }
   cudaDeviceSynchronize();
   double tt = t.toc();
-  printf("GPU time = %fs\n", tt/50);
+  printf("nsmem GPU time = %fs\n", tt);
 
-
-  // Write output
-  // write_image("CPU.ppm", I1_ref);
   cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
-  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  //write_image("rof-nsmem.ppm", u0);
+  // Write output
+  write_image("rof-nsmem.ppm", u0);
  
 /*
   cudaDeviceSynchronize();
@@ -610,87 +439,52 @@ int main(int argc, char * argv[] ) {
   printf("GPU time = %fs\n", tt);
   
 */
-/*
+  cudaFree(gradx);
+  cudaFree(grady);
+  cudaFree(p1xgpu);
+  cudaFree(p1ygpu);
+  cudaFree(p0xgpu);
+  cudaFree(p0ygpu);
+  cudaFree(div);
+  
+  cudaMalloc(&p0xgpu, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&p0ygpu, 3*Xsize*Ysize*sizeof(float));
+  cudaMalloc(&div, 3*Xsize*Ysize*sizeof(float));
+
   cudaDeviceSynchronize();
   t.tic();
+
   for (long n = 0; n < T; n++) {
     rof_gsmem<<<gridDim,blockDim, 0, streams[0]>>>(p0xgpu+0*Xsize*Ysize, p0ygpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, lambda, tau, Xsize, Ysize, div+0*Xsize*Ysize);
     rof_gsmem<<<gridDim,blockDim, 1, streams[1]>>>(p0xgpu+1*Xsize*Ysize, p0ygpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, lambda, tau, Xsize, Ysize, div+1*Xsize*Ysize);
     rof_gsmem<<<gridDim,blockDim, 2, streams[2]>>>(p0xgpu+2*Xsize*Ysize, p0ygpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, lambda, tau, Xsize, Ysize, div+2*Xsize*Ysize);
-    //printf("iter %d\n",n);
   }
-  //printf("after iters\n");
+
   compute_u<<<gridDim,blockDim, 0, streams[0]>>>(ugpu+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, lambda, Xsize, Ysize, div+0*Xsize*Ysize);
   compute_u<<<gridDim,blockDim, 1, streams[1]>>>(ugpu+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, lambda, Xsize, Ysize, div+1*Xsize*Ysize);
   compute_u<<<gridDim,blockDim, 2, streams[2]>>>(ugpu+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, lambda, Xsize, Ysize, div+2*Xsize*Ysize);
+
   cudaDeviceSynchronize();
-  double tt = t.toc();
-  printf("GPU time = %fs\n", tt);
-*/
-  // Print error
-  /*
-  float err = 0;
-  cudaMemcpy(I1.A, I1gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  for (long i = 0; i < 3*Xsize*Ysize; i++) err = std::max(err, fabs(I1.A[i] - I1_ref.A[i]));
-  printf("Error = %e\n", err);
-  */
+  tt = t.toc();
+  printf("gsmem GPU time = %fs\n", tt);
+
+  cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
 
   // Write output
-  // write_image("CPU.ppm", I1_ref);
- // cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
+  write_image("rof-gsmem.ppm", u0);
 
-  // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-  //write_image("car_smem2.ppm", u0);
-
-
-  /*
-  cudaDeviceSynchronize();
- 
-  t.tic();
-  for (long n = 0; n < T; n++) {
-    norm_upd_smem<<<gridDim,blockDim, 0, streams[0]>>>(dugpu+0*Xsize*Ysize, hfgpu+0*Xsize*Ysize, u0smem+0*Xsize*Ysize, fgpu+0*Xsize*Ysize, errgpu+0*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-    norm_upd_smem<<<gridDim,blockDim, 1, streams[1]>>>(dugpu+1*Xsize*Ysize, hfgpu+1*Xsize*Ysize, u0smem+1*Xsize*Ysize, fgpu+1*Xsize*Ysize, errgpu+1*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-    norm_upd_smem<<<gridDim,blockDim, 2, streams[2]>>>(dugpu+2*Xsize*Ysize, hfgpu+2*Xsize*Ysize, u0smem+2*Xsize*Ysize, fgpu+2*Xsize*Ysize, errgpu+2*Xsize*Ysize, eps, del, h, Xsize, Ysize);
-*/
-    /*cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-    float norm_err = norm(err,Xsize,Ysize);
-    printf("TV iters: %d, err: %f\n", n, norm_err);*/
-
-
-     /* if (k%2 == 0) {
-        cudaMemcpy(err, errgpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-        float norm_err = norm(err,Xsize,Ysize);
-        printf("Jacobi iters: %d, err: %f\n", k, norm_err);
-      }*/
-
-    //}
-  //}
-  //cudaDeviceSynchronize();
-  //tt = t.toc();
-  //printf("GPU time = %fs\n", tt);
-  //cudaMemcpy(unoise.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
- // Write output, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
-   //write_image("smem.ppm", u0);
 
   // Free memory
   cudaStreamDestroy(streams[0]);
   cudaStreamDestroy(streams[1]);
   cudaStreamDestroy(streams[2]);
   cudaFree(ugpu);
-  //cudaFree(usmem);
-  cudaFree(p1xgpu);
   cudaFree(fgpu);
-  cudaFree(p1ygpu);
+  cudaFree(div);
   cudaFree(p0xgpu);
   cudaFree(p0ygpu);
-  cudaFree(gradx);
-  cudaFree(grady);
-  cudaFree(div);
   free_image(&u0);
-  //free_image(&f);
   free_image(&unoise);
-  //free(err);
-  //free_image(&I1_ref);
   return 0;
 }
 
