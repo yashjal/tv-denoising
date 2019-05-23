@@ -345,7 +345,7 @@ int main(int argc, char * argv[] ) {
   float mu = 0;
   float sigma = 50;
   float tau = 0.245;
-  const char fname[] = "gs_owl.ppm";
+  const char fname[] = "car.ppm";
   
   //sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
