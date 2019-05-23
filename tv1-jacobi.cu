@@ -311,7 +311,7 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 
 
 int main(int argc, char * argv[] ) {
-  long T = 100; // total variation iters 
+  long T = 200; // total variation iters 
   long N = 20; // jacobi iters
   float eps = 1e-4;
   float del = 1e-4;
