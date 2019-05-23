@@ -315,7 +315,7 @@ int main(int argc, char * argv[] ) {
   long N = 15; // jacobi iters
   float eps = 1e-4;
   float del = 1e-4;
-  float lambda = 1; 
+  float lambda = 2.0; 
   float mu = 0;
   float sigma = 50;
   const char fname[] = "car.ppm";
