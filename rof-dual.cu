@@ -341,11 +341,11 @@ __global__ void compute_u(float* u, float *f, float lambda, long Xsize, long Ysi
 
 int main(int argc, char * argv[] ) {
   long T = 250; 
-  float lambda = 50; 
+  float lambda = 100; 
   float mu = 0;
   float sigma = 50;
   float tau = 0.245;
-  const char fname[] = "car.ppm";
+  const char fname[] = "gs_owl.ppm";
   
   //sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
@@ -415,7 +415,7 @@ int main(int argc, char * argv[] ) {
   cudaDeviceSynchronize();
   double tt = t.toc();
   printf("nsmem GPU time = %fs\n", tt);
-
+  printf("GPU Bandwidth = %f \n", (24*Xsize*Ysize*T*sizeof(float)+3*Xsize*Ysize*sizeof(float))/tt/1e9);
   cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
   // Write output
@@ -467,7 +467,7 @@ int main(int argc, char * argv[] ) {
   cudaDeviceSynchronize();
   tt = t.toc();
   printf("gsmem GPU time = %fs\n", tt);
-
+  printf("GPU Bandwidth = %f \n", (7*Xsize*Ysize*T + 6*Xsize*Ysize*T/BLOCK_DIM+3*Xsize*Ysize)*sizeof(float)/tt/1e9);
   cudaMemcpy(u0.A, ugpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
 
   // Write output

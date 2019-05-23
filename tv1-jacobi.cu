@@ -315,7 +315,7 @@ int main(int argc, char * argv[] ) {
   long N = 20; // jacobi iters
   float eps = 1e-4;
   float del = 1e-4;
-  float lambda = 0.5; 
+  float lambda = 0.05; 
   float mu = 0;
   float sigma = 50;
   const char fname[] = "car.ppm";
@@ -407,7 +407,7 @@ int main(int argc, char * argv[] ) {
   cudaDeviceSynchronize();
   double tt = t.toc();
   printf("non-smem GPU time = %fs\n", tt);
-
+  printf("GPU Bandwidth %f GB/s \n", (12*N + 8)*Xsize*Ysize*T*sizeof(float)/tt/1e9);
   cudaMemcpy(u0.A, u0gpu, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
  
   // Write output
@@ -449,6 +449,7 @@ int main(int argc, char * argv[] ) {
   cudaDeviceSynchronize();
   tt = t.toc();
   printf("smem GPU time = %fs\n", tt);
+  printf("GPU Bandwidth %f GB/s \n", (4/BLOCK_DIM*N + 5*N + 3)*Xsize*Ysize*T*sizeof(float)/tt/1e9);
   
   cudaMemcpy(u0.A, u0smem, 3*Xsize*Ysize*sizeof(float), cudaMemcpyDeviceToHost);
   
