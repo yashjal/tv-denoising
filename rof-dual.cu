@@ -262,12 +262,12 @@ __global__ void compute_u(float* u, float *f, float lambda, long Xsize, long Ysi
 }
 
 int main(int argc, char * argv[] ) {
-  long T = 250; 
+  long T = 500; 
   float lambda = 100; 
   float mu = 0;
   float sigma = 50;
   float tau = 0.245;
-  const char fname[] = "monalisa.ppm";
+  const char fname[] = "gs_owl.ppm";
   
   //sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
