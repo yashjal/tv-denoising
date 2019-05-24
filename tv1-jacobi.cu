@@ -311,14 +311,14 @@ __global__ void GPU_jacobi_smem(float* u0, float *f, float* err, long Xsize, lon
 
 
 int main(int argc, char * argv[] ) {
-  long T = 500; // total variation iters 
+  long T = 250; // total variation iters 
   long N = 20; // jacobi iters
   float eps = 1e-4;
   float del = 1e-4;
   float lambda = 2.0; 
   float mu = 0;
   float sigma = 50;
-  const char fname[] = "gs_owl.ppm";
+  const char fname[] = "car.ppm";
   
   //sscanf(argv[1],"%d",&T);
   //sscanf(argv[2],"%d",&N);
